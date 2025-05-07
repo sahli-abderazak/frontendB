@@ -7,7 +7,7 @@ import { fr } from "date-fns/locale"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Calendar, User, Briefcase, Clock, MapPin, ArrowLeft, Check, X, CalendarIcon, Video } from "lucide-react"
+import { Calendar, User, Briefcase, Clock, MapPin, ArrowLeft, Check, X, CalendarIcon, Video, Star } from "lucide-react"
 import { DashboardHeaderRec } from "@/app/components/recruteur/dashboard-header_rec"
 import { DashboardSidebarRec } from "@/app/components/recruteur/dashboard-sidebar_rec"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 interface Interview {
   id: number
@@ -49,6 +50,12 @@ export default function EntretiensPage() {
   const [calendarDates, setCalendarDates] = useState<Date[]>([])
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date())
   const [loadingHours, setLoadingHours] = useState(false)
+  const [isTestimonialOpen, setIsTestimonialOpen] = useState(false)
+  const [testimonialData, setTestimonialData] = useState({
+    temoignage: "",
+    rate: 0,
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     const checkUserRole = async () => {
@@ -240,6 +247,10 @@ export default function EntretiensPage() {
         title: "Entretien terminé",
         description: "L'entretien a été marqué comme terminé.",
       })
+
+      // Ouvrir le popup de témoignage
+      setCurrentInterview(interviews.find((interview) => interview.id === interviewId) || null)
+      setIsTestimonialOpen(true)
     } catch (error) {
       console.error("Erreur:", error)
       toast({
@@ -247,6 +258,63 @@ export default function EntretiensPage() {
         description: "Une erreur est survenue lors de la mise à jour de l'entretien.",
         variant: "destructive",
       })
+    }
+  }
+
+  const submitTestimonial = async () => {
+    if (!testimonialData.temoignage) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez remplir le champ témoignage.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      const token = sessionStorage.getItem("token")
+      if (!token) {
+        router.push("/auth/login")
+        return
+      }
+
+      const response = await fetch("http://127.0.0.1:8000/api/temoiniage", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(testimonialData),
+      })
+
+      if (!response.ok) {
+        throw new Error("Erreur lors de l'envoi du témoignage")
+      }
+
+      const data = await response.json()
+
+      toast({
+        title: "Témoignage envoyé",
+        description: data.message,
+      })
+
+      // Fermer le popup et réinitialiser les données
+      setIsTestimonialOpen(false)
+      setTestimonialData({
+        temoignage: "",
+        rate: 0,
+      })
+    } catch (error) {
+      console.error("Erreur:", error)
+      toast({
+        title: "Erreur",
+        description: "Une erreur est survenue lors de l'envoi du témoignage.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -405,7 +473,6 @@ export default function EntretiensPage() {
                   Consultez et gérez tous vos entretiens techniques planifiés
                 </p>
               </div>
-             
             </div>
 
             {loading ? (
@@ -439,14 +506,10 @@ export default function EntretiensPage() {
                     </div>
                     <div className="mb-4">
                       <div className="flex items-center space-x-2">
-                      <Button
-                variant="outline"
-                onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-                className="w-full"
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                Voir le calendrier complet
-              </Button>
+                        <Button variant="outline" onClick={() => setIsCalendarOpen(!isCalendarOpen)} className="w-full">
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          Voir le calendrier complet
+                        </Button>
                       </div>
                     </div>
                     <Button variant="outline" className="w-full" onClick={() => setSelectedDate(new Date())}>
@@ -750,6 +813,65 @@ export default function EntretiensPage() {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Popup de témoignage */}
+      <Dialog open={isTestimonialOpen} onOpenChange={setIsTestimonialOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Partagez votre expérience</DialogTitle>
+            <p className="text-sm text-muted-foreground mt-2">
+              Votre témoignage nous aide à améliorer notre processus de recrutement
+            </p>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="temoignage">Témoignage</Label>
+              <Textarea
+                id="temoignage"
+                value={testimonialData.temoignage}
+                onChange={(e) => setTestimonialData({ ...testimonialData, temoignage: e.target.value })}
+                placeholder="Partagez votre expérience avec ce candidat..."
+                className="min-h-[100px]"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="rate">Évaluation</Label>
+              <div className="flex items-center space-x-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    className="focus:outline-none"
+                    onClick={() => setTestimonialData({ ...testimonialData, rate: star })}
+                  >
+                    <Star
+                      className={cn(
+                        "h-6 w-6 cursor-pointer",
+                        testimonialData.rate >= star ? "fill-yellow-400 text-yellow-400" : "text-gray-300",
+                      )}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex justify-between">
+            <Button variant="outline" onClick={() => setIsTestimonialOpen(false)}>
+              Plus tard
+            </Button>
+            <Button onClick={submitTestimonial} disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                  Envoi...
+                </>
+              ) : (
+                "Envoyer"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

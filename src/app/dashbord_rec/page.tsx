@@ -13,11 +13,13 @@ import { DashboardHeaderRec } from "../components/recruteur/dashboard-header_rec
 export default function RecruiterDashboard() {
   const router = useRouter()
   const [shouldRender, setShouldRender] = useState(false)
+  const [profileError, setProfileError] = useState(false)
 
   useEffect(() => {
     // Vérifier le rôle de l'utilisateur avant de rendre la page
     const checkUserRole = async () => {
       try {
+        setProfileError(false)
         const token = sessionStorage.getItem("token")
         if (!token) {
           // Rediriger vers la page de connexion si pas de token
@@ -25,30 +27,44 @@ export default function RecruiterDashboard() {
           return
         }
 
-        const response = await fetch("http://127.0.0.1:8000/api/users/profile", {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
+        try {
+          const response = await fetch("http://127.0.0.1:8000/api/users/profile", {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
 
-        if (!response.ok) {
-          throw new Error("Erreur lors de la récupération des données")
-        }
+          if (!response.ok) {
+            if (response.status === 401) {
+              // Token expiré ou invalide
+              sessionStorage.removeItem("token")
+              router.push("/")
+              return
+            }
+            throw new Error(`Erreur HTTP: ${response.status}`)
+          }
 
-        const userData = await response.json()
+          const userData = await response.json()
 
-        // Si l'utilisateur est un recruteur, autoriser le rendu de la page
-        if (userData.role === "recruteur") {
+          // Si l'utilisateur est un recruteur, autoriser le rendu de la page
+          if (userData.role === "recruteur") {
+            setShouldRender(true)
+          } else {
+            // Si autre rôle, rediriger vers la page d'accueil
+            router.push("/dashboard/admin")
+          }
+        } catch (fetchError) {
+          console.error("Erreur lors de la récupération du profil:", fetchError)
+          setProfileError(true)
+          // Autoriser quand même le rendu de la page en mode dégradé
           setShouldRender(true)
-        } else {
-          // Si autre rôle, rediriger vers la page d'accueil
-          router.push("/dashboard/admin")
         }
       } catch (error) {
-        console.error("Erreur:", error)
-        // En cas d'erreur, rediriger vers la page d'accueil
-        router.push("/")
+        console.error("Erreur générale:", error)
+        setProfileError(true)
+        // Autoriser quand même le rendu de la page en mode dégradé
+        setShouldRender(true)
       }
     }
 
@@ -61,39 +77,60 @@ export default function RecruiterDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <DashboardHeaderRec />
       <div className="container mx-auto p-4 md:p-6 lg:p-8 pt-6">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           {/* Sidebar - visible on desktop, hidden on mobile (handled by MobileSidebar) */}
-          <div className="hidden md:block md:col-span-1 lg:col-span-1">
+          <div className="hidden md:block md:col-span-2 lg:col-span-2">
             <div className="sticky top-20">
               <DashboardSidebarRec />
             </div>
           </div>
 
           {/* Main Content */}
-          <div className="md:col-span-5 lg:col-span-5 space-y-6">
+          <div className="md:col-span-10 lg:col-span-10 space-y-6">
             {/* Welcome Banner */}
             <WelcomeBanner />
+            {profileError && (
+              <div
+                className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative mb-6 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400"
+                role="alert"
+              >
+                <strong className="font-bold">Attention!</strong>
+                <span className="block sm:inline">
+                  {" "}
+                  Impossible de récupérer votre profil complet. Certaines fonctionnalités peuvent être limitées.
+                </span>
+              </div>
+            )}
 
-            {/* Stats Cards */}
+            {/* Stats Cards - Fixed height and consistent design */}
             <div className="grid gap-6">
+              <h2 className="text-xl font-semibold text-blue-700 dark:text-blue-400">Vue d'ensemble</h2>
               <StatsCards isAdmin={false} />
             </div>
 
-            {/* Upcoming Interviews */}
-            <div className="grid gap-6">
-              <UpcomingInterviews />
-            </div>
+            {/* Two Column Layout for Charts and Upcoming Interviews */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+              <div className="lg:col-span-2">
+                <h2 className="text-xl font-semibold text-blue-600 dark:text-blue-400 mb-4">Statistiques</h2>
+                <div className="h-full">
+                  <DashboardCharts isAdmin={false} />
+                </div>
+              </div>
 
-            {/* Charts Section */}
-            <div className="grid gap-6">
-              <DashboardCharts isAdmin={false} />
+              <div className="lg:col-span-1">
+                <h2 className="text-xl font-semibold text-blue-600 dark:text-blue-400 mb-4">Entretiens</h2>
+                <div className="h-full">
+                  <UpcomingInterviews />
+                </div>
+              </div>
             </div>
 
             {/* Detailed Stats Section */}
-            <div className="grid gap-6">
+            <div className="grid gap-6 mt-8">
+              <h2 className="text-xl font-semibold text-blue-700 dark:text-blue-400">Analyses détaillées</h2>
               <DetailedStats isAdmin={false} />
             </div>
           </div>

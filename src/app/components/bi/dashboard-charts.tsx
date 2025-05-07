@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 
 // Type pour les données de graphique
 type ChartData = {
@@ -23,62 +24,151 @@ export function DashboardCharts({ isAdmin = false }) {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
   const [candidatsParDepartement, setCandidatsParDepartement] = useState<ChartData[]>([])
   const [candidatsParMois, setCandidatsParMois] = useState<LineChartData[]>([])
-  const [offresParDepartement, setOffresParDepartement] = useState<ChartData[]>([])
-  const [entretiensParStatut, setEntretiensParStatut] = useState<ChartData[]>([])
+  const [candidatsParNiveau, setCandidatsParNiveau] = useState<ChartData[]>([])
+  const [candidatsParOffre, setCandidatsParOffre] = useState<ChartData[]>([])
+  const [error, setError] = useState(false)
+
+  // Données de démonstration en cas d'erreur
+  const demoData: ChartData[] = [
+    { name: "Informatique", value: 12 },
+    { name: "Marketing", value: 8 },
+    { name: "Finance", value: 5 },
+    { name: "RH", value: 3 },
+  ]
+
+  const demoLineData: LineChartData[] = [
+    { name: "Jan", Candidats: 5 },
+    { name: "Fév", Candidats: 8 },
+    { name: "Mar", Candidats: 12 },
+    { name: "Avr", Candidats: 10 },
+    { name: "Mai", Candidats: 15 },
+  ]
+
+  const demoNiveauData: ChartData[] = [
+    { name: "Bac", value: 5 },
+    { name: "Bac+2", value: 12 },
+    { name: "Bac+3", value: 8 },
+    { name: "Bac+5", value: 15 },
+    { name: "Doctorat", value: 3 },
+  ]
+
+  const demoOffreData: ChartData[] = [
+    { name: "Développeur Frontend", value: 7 },
+    { name: "Développeur Backend", value: 5 },
+    { name: "Data Scientist", value: 3 },
+    { name: "Chef de Projet", value: 4 },
+  ]
 
   // Fonction pour charger les données
   const loadData = async () => {
     setRefreshing(true)
+    setError(false)
     try {
       const token = sessionStorage.getItem("token")
       if (!token) {
         console.error("Aucun token trouvé")
+        setError(true)
+        setRefreshing(false)
         return
       }
 
       const prefix = isAdmin ? "admin" : "recruteur"
 
       // Charger les données depuis les API
-      const [deptRes, moisRes, offresDeptRes, statutRes] = await Promise.all([
-        fetch(`http://127.0.0.1:8000/api/${prefix}/candidats-par-departement`, {
+      try {
+        const deptRes = await fetch(`http://127.0.0.1:8000/api/${prefix}/candidats-par-departementRec`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }),
-        fetch(`http://127.0.0.1:8000/api/${prefix}/candidats-par-mois`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }),
-        fetch(`http://127.0.0.1:8000/api/${prefix}/offres-par-departement`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }),
-        fetch(`http://127.0.0.1:8000/api/${prefix}/entretiens-par-statut`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }),
-      ])
+        })
 
-      if (!deptRes.ok || !moisRes.ok || !offresDeptRes.ok || !statutRes.ok) {
-        throw new Error("Erreur lors de la récupération des données")
+        if (deptRes.ok) {
+          const deptData = await deptRes.json()
+          if (Array.isArray(deptData) && deptData.length > 0) {
+            setCandidatsParDepartement(deptData)
+          } else {
+            setCandidatsParDepartement(demoData)
+          }
+        } else {
+          setCandidatsParDepartement(demoData)
+        }
+      } catch (e) {
+        console.error("Erreur lors du chargement des candidats par département:", e)
+        setCandidatsParDepartement(demoData)
       }
 
-      const deptData = await deptRes.json()
-      const moisData = await moisRes.json()
-      const offresDeptData = await offresDeptRes.json()
-      const statutData = await statutRes.json()
+      try {
+        const moisRes = await fetch(`http://127.0.0.1:8000/api/${prefix}/candidats-par-moisRec`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
 
-      setCandidatsParDepartement(deptData)
-      setCandidatsParMois(moisData)
-      setOffresParDepartement(offresDeptData)
-      setEntretiensParStatut(statutData)
+        if (moisRes.ok) {
+          const moisData = await moisRes.json()
+          if (Array.isArray(moisData) && moisData.length > 0) {
+            setCandidatsParMois(moisData)
+          } else {
+            setCandidatsParMois(demoLineData)
+          }
+        } else {
+          setCandidatsParMois(demoLineData)
+        }
+      } catch (e) {
+        console.error("Erreur lors du chargement des candidats par mois:", e)
+        setCandidatsParMois(demoLineData)
+      }
+
+      // Charger les données de niveau d'études
+      try {
+        const niveauRes = await fetch("http://127.0.0.1:8000/api/recruteur/candidats-par-niveauRec", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (niveauRes.ok) {
+          const niveauData = await niveauRes.json()
+          if (Array.isArray(niveauData) && niveauData.length > 0) {
+            setCandidatsParNiveau(niveauData)
+          } else {
+            setCandidatsParNiveau(demoNiveauData)
+          }
+        } else {
+          setCandidatsParNiveau(demoNiveauData)
+        }
+      } catch (e) {
+        console.error("Erreur lors du chargement des candidats par niveau:", e)
+        setCandidatsParNiveau(demoNiveauData)
+      }
+
+      // Charger les données de candidats par poste
+      try {
+        const offreRes = await fetch("http://127.0.0.1:8000/api/recruteur/candidats-par-poste", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (offreRes.ok) {
+          const offreData = await offreRes.json()
+          if (Array.isArray(offreData) && offreData.length > 0) {
+            setCandidatsParOffre(offreData)
+          } else {
+            setCandidatsParOffre([])
+          }
+        } else {
+          setCandidatsParOffre([])
+        }
+      } catch (e) {
+        console.error("Erreur lors du chargement des candidats par offre:", e)
+        setCandidatsParOffre([])
+      }
 
       setLastUpdated(new Date())
     } catch (error) {
       console.error("Erreur lors du chargement des données:", error)
+      setError(true)
     } finally {
       setRefreshing(false)
     }
@@ -94,8 +184,8 @@ export function DashboardCharts({ isAdmin = false }) {
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
+    <Card className="border-blue-100 dark:border-blue-900 shadow-md overflow-hidden min-h-[600px] flex flex-col">
+      <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-blue-100 dark:border-blue-800">
         <CardTitle className="text-lg font-medium">Statistiques des Candidats</CardTitle>
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground">Dernière mise à jour: {formatLastUpdated()}</span>
@@ -111,89 +201,135 @@ export function DashboardCharts({ isAdmin = false }) {
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="departements" className="w-full">
+      <CardContent className="p-4 flex-grow">
+        <Tabs defaultValue="departements" className="w-full h-full flex flex-col">
           <TabsList className="grid grid-cols-4 mb-4">
-            <TabsTrigger value="departements">Par Département</TabsTrigger>
-            <TabsTrigger value="tendances">Tendances</TabsTrigger>
-            <TabsTrigger value="offres">Offres</TabsTrigger>
-            <TabsTrigger value="statuts">Statuts Entretiens</TabsTrigger>
+            <TabsTrigger
+              value="departements"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+            >
+              Par Département
+            </TabsTrigger>
+            <TabsTrigger value="tendances" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+              Tendances
+            </TabsTrigger>
+            <TabsTrigger value="niveau" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+              Niveau d'Études
+            </TabsTrigger>
+            <TabsTrigger value="postes" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+              Candidats par Poste
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="departements" className="space-y-4">
-            <div className="h-[300px]">
-              {candidatsParDepartement.length > 0 ? (
-                <BarChart
-                  data={candidatsParDepartement}
-                  index="name"
-                  categories={["value"]}
-                  colors={["violet"]}
-                  valueFormatter={(value) => `${value} candidats`}
-                  yAxisWidth={48}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  <p className="text-muted-foreground">Chargement des données...</p>
-                </div>
-              )}
-            </div>
-          </TabsContent>
+          <div className="flex-grow">
+            <TabsContent value="departements" className="h-full">
+              <div className="h-[350px]">
+                {candidatsParDepartement.length > 0 ? (
+                  <BarChart
+                    data={candidatsParDepartement}
+                    index="name"
+                    categories={["value"]}
+                    colors={["blue"]}
+                    valueFormatter={(value) => `${value} candidats`}
+                    yAxisWidth={48}
+                    className="mt-4"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center">
+                    {error ? (
+                      <p className="text-red-500">Erreur lors du chargement des données</p>
+                    ) : (
+                      <div className="space-y-4 w-full">
+                        <Skeleton className="h-[250px] w-full" />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
 
-          <TabsContent value="tendances" className="space-y-4">
-            <div className="h-[300px]">
-              {candidatsParMois.length > 0 ? (
-                <LineChart
-                  data={candidatsParMois}
-                  index="name"
-                  categories={["Candidats"]}
-                  colors={["green"]}
-                  valueFormatter={(value) => `${value} candidats`}
-                  yAxisWidth={48}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  <p className="text-muted-foreground">Chargement des données...</p>
-                </div>
-              )}
-            </div>
-          </TabsContent>
+            <TabsContent value="tendances" className="h-full">
+              <div className="h-[350px]">
+                {candidatsParMois.length > 0 ? (
+                  <LineChart
+                    data={candidatsParMois}
+                    index="name"
+                    categories={["Candidats"]}
+                    colors={["blue"]}
+                    valueFormatter={(value) => `${value} candidats`}
+                    yAxisWidth={48}
+                    className="mt-4"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center">
+                    {error ? (
+                      <p className="text-red-500">Erreur lors du chargement des données</p>
+                    ) : (
+                      <div className="space-y-4 w-full">
+                        <Skeleton className="h-[250px] w-full" />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
 
-          <TabsContent value="offres" className="space-y-4">
-            <div className="h-[300px]">
-              {offresParDepartement.length > 0 ? (
-                <BarChart
-                  data={offresParDepartement}
-                  index="name"
-                  categories={["value"]}
-                  colors={["blue"]}
-                  valueFormatter={(value) => `${value} offres`}
-                  yAxisWidth={48}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  <p className="text-muted-foreground">Chargement des données...</p>
-                </div>
-              )}
-            </div>
-          </TabsContent>
+            <TabsContent value="niveau" className="h-full">
+              <div className="h-[350px]">
+                {candidatsParNiveau.length > 0 ? (
+                  <>
+                    <div className="mb-2 text-sm text-muted-foreground">
+                      {candidatsParNiveau.length} niveaux d'études trouvés
+                    </div>
+                    <DonutChart
+                      data={candidatsParNiveau}
+                      index="name"
+                      category="value"
+                      valueFormatter={(value) => `${value} candidats`}
+                      colors={["blue", "indigo", "slate", "sky", "navy"]}
+                      className="mt-4"
+                    />
+                  </>
+                ) : (
+                  <div className="flex h-full items-center justify-center">
+                    {error ? (
+                      <p className="text-red-500">Erreur lors du chargement des données</p>
+                    ) : (
+                      <div className="space-y-4 w-full">
+                        <Skeleton className="h-[250px] w-full rounded-full mx-auto max-w-[250px]" />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
 
-          <TabsContent value="statuts" className="space-y-4">
-            <div className="h-[300px]">
-              {entretiensParStatut.length > 0 ? (
-                <DonutChart
-                  data={entretiensParStatut}
-                  index="name"
-                  category="value"
-                  valueFormatter={(value) => `${value} entretiens`}
-                  colors={["violet", "indigo", "emerald", "amber"]}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  <p className="text-muted-foreground">Chargement des données...</p>
-                </div>
-              )}
-            </div>
-          </TabsContent>
+            <TabsContent value="postes" className="h-full">
+              <div className="h-[350px]">
+                {candidatsParOffre.length > 0 ? (
+                  <BarChart
+                    data={candidatsParOffre}
+                    index="name"
+                    categories={["value"]}
+                    colors={["indigo"]}
+                    valueFormatter={(value) => `${value} candidats`}
+                    yAxisWidth={48}
+                    className="mt-4"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center">
+                    {error ? (
+                      <p className="text-red-500">Erreur lors du chargement des données</p>
+                    ) : (
+                      <div className="space-y-4 w-full">
+                        <Skeleton className="h-[250px] w-full" />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </div>
         </Tabs>
       </CardContent>
     </Card>

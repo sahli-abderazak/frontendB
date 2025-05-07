@@ -2,17 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { BarChart } from "@/components/ui/chart"
-import { Users, Briefcase, CheckCircle, Clock } from "lucide-react"
+import { Users, Briefcase, Clock, CheckCircle } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 
 type StatsData = {
   totalCandidats: number
   totalOffres: number
   totalEntretiens: number
   totalRecruteurs: number
-  candidatsTendance: { name: string; value: number }[]
-  offresTendance: { name: string; value: number }[]
-  entretiensTendance: { name: string; value: number }[]
 }
 
 type RecruteurStatsData = {
@@ -20,8 +17,6 @@ type RecruteurStatsData = {
   totalMesOffres: number
   totalMesEntretiens: number
   entretiensPending: number
-  candidatsTendance: { name: string; value: number }[]
-  entretiensTendance: { name: string; value: number }[]
 }
 
 interface StatsCardsProps {
@@ -31,18 +26,22 @@ interface StatsCardsProps {
 export function StatsCards({ isAdmin = false }: StatsCardsProps) {
   const [stats, setStats] = useState<StatsData | RecruteurStatsData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
-  useEffect(() => {
-    const fetchStats = async () => {
+  const fetchStats = async () => {
+    try {
+      setError(false)
+      const token = sessionStorage.getItem("token")
+      if (!token) {
+        console.error("Aucun token trouvé")
+        setError(true)
+        setLoading(false)
+        return
+      }
+
+      const endpoint = isAdmin ? "http://127.0.0.1:8000/api/admin/stats" : "http://127.0.0.1:8000/api/recruteur/stats"
+
       try {
-        const token = sessionStorage.getItem("token")
-        if (!token) {
-          console.error("Aucun token trouvé")
-          return
-        }
-
-        const endpoint = isAdmin ? "http://127.0.0.1:8000/api/admin/stats" : "http://127.0.0.1:8000/api/recruteur/stats"
-
         const response = await fetch(endpoint, {
           method: "GET",
           headers: {
@@ -51,18 +50,41 @@ export function StatsCards({ isAdmin = false }: StatsCardsProps) {
         })
 
         if (!response.ok) {
-          throw new Error("Erreur lors de la récupération des statistiques")
+          throw new Error(`Erreur HTTP: ${response.status}`)
         }
 
         const data = await response.json()
         setStats(data)
-      } catch (error) {
-        console.error("Erreur lors du chargement des statistiques:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
+      } catch (fetchError) {
+        console.error("Erreur lors de la récupération des statistiques:", fetchError)
+        setError(true)
 
+        // Définir des données par défaut pour éviter les erreurs d'affichage
+        if (!isAdmin) {
+          setStats({
+            totalMesCandidats: 0,
+            totalMesOffres: 0,
+            totalMesEntretiens: 0,
+            entretiensPending: 0,
+          })
+        } else {
+          setStats({
+            totalCandidats: 0,
+            totalOffres: 0,
+            totalEntretiens: 0,
+            totalRecruteurs: 0,
+          })
+        }
+      }
+    } catch (error) {
+      console.error("Erreur générale:", error)
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     fetchStats()
   }, [isAdmin])
 
@@ -70,13 +92,14 @@ export function StatsCards({ isAdmin = false }: StatsCardsProps) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[...Array(4)].map((_, i) => (
-          <Card key={i} className="overflow-hidden">
+          <Card key={i} className="overflow-hidden border border-blue-100 dark:border-blue-900 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Chargement...</CardTitle>
+              <CardTitle className="text-sm font-medium">{error ? "Erreur de chargement" : "Chargement..."}</CardTitle>
+              <Skeleton className="h-4 w-4 rounded-full" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">--</div>
-              <p className="text-xs text-muted-foreground">Chargement des données...</p>
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-4 w-24" />
             </CardContent>
           </Card>
         ))}
@@ -86,186 +109,58 @@ export function StatsCards({ isAdmin = false }: StatsCardsProps) {
 
   if (!stats) return null
 
-  if (isAdmin) {
-    const adminStats = stats as StatsData
-    return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Candidats</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{adminStats.totalCandidats}</div>
-            <p className="text-xs text-muted-foreground">Candidats enregistrés</p>
-            <div className="h-[80px] mt-2">
-              {adminStats.candidatsTendance && adminStats.candidatsTendance.length > 0 && (
-                <BarChart
-                  data={adminStats.candidatsTendance}
-                  index="name"
-                  categories={["value"]}
-                  colors={["violet"]}
-                  showXAxis={false}
-                  showYAxis={false}
-                  showLegend={false}
-                  showGridLines={false}
-                  startEndOnly={false}
-                  showAnimation={true}
-                />
-              )}
-            </div>
-          </CardContent>
-        </Card>
+  const cardConfigs = [
+    {
+      title: isAdmin ? "Total Candidats" : "Mes Candidats",
+      value: isAdmin ? (stats as StatsData).totalCandidats : (stats as RecruteurStatsData).totalMesCandidats,
+      description: isAdmin ? "Candidats enregistrés" : "Candidats pour vos offres",
+      icon: Users,
+      iconColor: "text-blue-600",
+      bgColor: "bg-blue-50",
+    },
+    {
+      title: isAdmin ? "Offres Actives" : "Mes Offres",
+      value: isAdmin ? (stats as StatsData).totalOffres : (stats as RecruteurStatsData).totalMesOffres,
+      description: "Offres publiées",
+      icon: Briefcase,
+      iconColor: "text-blue-600",
+      bgColor: "bg-blue-50",
+    },
+    {
+      title: isAdmin ? "Entretiens" : "Mes Entretiens",
+      value: isAdmin ? (stats as StatsData).totalEntretiens : (stats as RecruteurStatsData).totalMesEntretiens,
+      description: "Entretiens planifiés",
+      icon: Clock,
+      iconColor: "text-blue-600",
+      bgColor: "bg-blue-50",
+    },
+    {
+      title: isAdmin ? "Recruteurs" : "En Attente",
+      value: isAdmin ? (stats as StatsData).totalRecruteurs : (stats as RecruteurStatsData).entretiensPending,
+      description: isAdmin ? "Recruteurs actifs" : "Entretiens en attente",
+      icon: CheckCircle,
+      iconColor: "text-blue-600",
+      bgColor: "bg-blue-50",
+    },
+  ]
 
-        <Card className="overflow-hidden">
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {cardConfigs.map((config, index) => (
+        <Card
+          key={index}
+          className="overflow-hidden border border-blue-100 dark:border-blue-900 shadow-sm hover:shadow-md transition-shadow"
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Offres Actives</CardTitle>
-            <Briefcase className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">{config.title}</CardTitle>
+            <config.icon className={`h-5 w-5 text-blue-600 dark:text-blue-400`} />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{adminStats.totalOffres}</div>
-            <p className="text-xs text-muted-foreground">Offres publiées</p>
-            <div className="h-[80px] mt-2">
-              {adminStats.offresTendance && adminStats.offresTendance.length > 0 && (
-                <BarChart
-                  data={adminStats.offresTendance}
-                  index="name"
-                  categories={["value"]}
-                  colors={["green"]}
-                  showXAxis={false}
-                  showYAxis={false}
-                  showLegend={false}
-                  showGridLines={false}
-                  startEndOnly={false}
-                  showAnimation={true}
-                />
-              )}
-            </div>
+          <CardContent className="pt-4">
+            <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{config.value}</div>
+            <p className="text-xs text-muted-foreground mt-1">{config.description}</p>
           </CardContent>
         </Card>
-
-        <Card className="overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Entretiens</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{adminStats.totalEntretiens}</div>
-            <p className="text-xs text-muted-foreground">Entretiens planifiés</p>
-            <div className="h-[80px] mt-2">
-              {adminStats.entretiensTendance && adminStats.entretiensTendance.length > 0 && (
-                <BarChart
-                  data={adminStats.entretiensTendance}
-                  index="name"
-                  categories={["value"]}
-                  colors={["blue"]}
-                  showXAxis={false}
-                  showYAxis={false}
-                  showLegend={false}
-                  showGridLines={false}
-                  startEndOnly={false}
-                  showAnimation={true}
-                />
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Recruteurs</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{adminStats.totalRecruteurs}</div>
-            <p className="text-xs text-muted-foreground">Recruteurs actifs</p>
-            <div className="h-[80px] mt-2"></div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  } else {
-    const recruteurStats = stats as RecruteurStatsData
-    return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mes Candidats</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{recruteurStats.totalMesCandidats}</div>
-            <p className="text-xs text-muted-foreground">Candidats pour vos offres</p>
-            <div className="h-[80px] mt-2">
-              {recruteurStats.candidatsTendance && recruteurStats.candidatsTendance.length > 0 && (
-                <BarChart
-                  data={recruteurStats.candidatsTendance}
-                  index="name"
-                  categories={["value"]}
-                  colors={["violet"]}
-                  showXAxis={false}
-                  showYAxis={false}
-                  showLegend={false}
-                  showGridLines={false}
-                  startEndOnly={false}
-                  showAnimation={true}
-                />
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mes Offres</CardTitle>
-            <Briefcase className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{recruteurStats.totalMesOffres}</div>
-            <p className="text-xs text-muted-foreground">Offres publiées</p>
-            <div className="h-[80px] mt-2"></div>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mes Entretiens</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{recruteurStats.totalMesEntretiens}</div>
-            <p className="text-xs text-muted-foreground">Entretiens planifiés</p>
-            <div className="h-[80px] mt-2">
-              {recruteurStats.entretiensTendance && recruteurStats.entretiensTendance.length > 0 && (
-                <BarChart
-                  data={recruteurStats.entretiensTendance}
-                  index="name"
-                  categories={["value"]}
-                  colors={["blue"]}
-                  showXAxis={false}
-                  showYAxis={false}
-                  showLegend={false}
-                  showGridLines={false}
-                  startEndOnly={false}
-                  showAnimation={true}
-                />
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">En Attente</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{recruteurStats.entretiensPending}</div>
-            <p className="text-xs text-muted-foreground">Entretiens en attente</p>
-            <div className="h-[80px] mt-2"></div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+      ))}
+    </div>
+  )
 }
