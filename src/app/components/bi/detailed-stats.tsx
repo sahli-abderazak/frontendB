@@ -22,18 +22,15 @@ export function DetailedStats({ isAdmin = false }: DetailedStatsProps) {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
   const [entretiensParStatut, setEntretiensParStatut] = useState<ChartData[]>([])
   const [entretiensParJour, setEntretiensParJour] = useState<ChartData[]>([])
-  const [offresParCandidat, setOffresParCandidat] = useState<ChartData[]>([])
   const [error, setError] = useState(false)
   const [loadingStatut, setLoadingStatut] = useState(true)
   const [loadingJour, setLoadingJour] = useState(true)
-  const [loadingOffres, setLoadingOffres] = useState(true)
 
   const loadData = async () => {
     setRefreshing(true)
     setError(false)
     setLoadingStatut(true)
     setLoadingJour(true)
-    setLoadingOffres(true)
 
     try {
       const token = sessionStorage.getItem("token")
@@ -43,7 +40,6 @@ export function DetailedStats({ isAdmin = false }: DetailedStatsProps) {
         setRefreshing(false)
         setLoadingStatut(false)
         setLoadingJour(false)
-        setLoadingOffres(false)
         return
       }
 
@@ -99,39 +95,12 @@ export function DetailedStats({ isAdmin = false }: DetailedStatsProps) {
         setLoadingJour(false)
       }
 
-      // Charger les données d'offres par candidat
-      try {
-        const offresParCandidatRes = await fetch("http://127.0.0.1:8000/api/recruteur/candidats-par-offre", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (offresParCandidatRes.ok) {
-          const offresParCandidatData = await offresParCandidatRes.json()
-          if (Array.isArray(offresParCandidatData)) {
-            setOffresParCandidat(offresParCandidatData)
-          } else {
-            setOffresParCandidat([])
-          }
-        } else {
-          console.error(`Erreur HTTP: ${offresParCandidatRes.status}`)
-          setOffresParCandidat([])
-        }
-      } catch (e) {
-        console.error("Erreur lors du chargement des offres par candidat:", e)
-        setOffresParCandidat([])
-      } finally {
-        setLoadingOffres(false)
-      }
-
       setLastUpdated(new Date())
     } catch (error) {
       console.error("Erreur lors du chargement des données:", error)
       setError(true)
       setEntretiensParStatut([])
       setEntretiensParJour([])
-      setOffresParCandidat([])
     } finally {
       setRefreshing(false)
     }
@@ -176,18 +145,12 @@ export function DetailedStats({ isAdmin = false }: DetailedStatsProps) {
       </CardHeader>
       <CardContent className="p-4 flex-grow">
         <Tabs defaultValue="statut" className="w-full h-full flex flex-col">
-          <TabsList className="grid grid-cols-3 mb-4">
+          <TabsList className="grid grid-cols-2 mb-4">
             <TabsTrigger value="statut" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
               Statut des Entretiens
             </TabsTrigger>
             <TabsTrigger value="jours" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
               Entretiens par Jour
-            </TabsTrigger>
-            <TabsTrigger
-              value="offres-candidat"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-            >
-              Candidats par Offre
             </TabsTrigger>
           </TabsList>
 
@@ -246,34 +209,6 @@ export function DetailedStats({ isAdmin = false }: DetailedStatsProps) {
                   />
                 ) : (
                   renderNoDataMessage("Aucun entretien planifié cette semaine")
-                )}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="offres-candidat" className="h-full">
-              <div className="h-[350px]">
-                {loadingOffres ? (
-                  <div className="flex h-full items-center justify-center">
-                    <div className="space-y-4 w-full">
-                      <Skeleton className="h-[350px] w-full" />
-                    </div>
-                  </div>
-                ) : error ? (
-                  <div className="flex h-full items-center justify-center">
-                    <p className="text-red-500">Erreur lors du chargement des données</p>
-                  </div>
-                ) : offresParCandidat.length > 0 ? (
-                  <BarChart
-                    data={offresParCandidat}
-                    index="name"
-                    categories={["value"]}
-                    colors={["blue"]}
-                    valueFormatter={(value) => `${value} candidats`}
-                    yAxisWidth={48}
-                    className="mt-4"
-                  />
-                ) : (
-                  renderNoDataMessage("Aucune donnée disponible pour les candidats par offre")
                 )}
               </div>
             </TabsContent>
