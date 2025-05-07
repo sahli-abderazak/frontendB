@@ -27,48 +27,21 @@ export function DashboardCharts({ isAdmin = false }) {
   const [candidatsParNiveau, setCandidatsParNiveau] = useState<ChartData[]>([])
   const [candidatsParOffre, setCandidatsParOffre] = useState<ChartData[]>([])
   const [error, setError] = useState(false)
-
-  // Données de démonstration en cas d'erreur
-  const demoData: ChartData[] = [
-    { name: "Informatique", value: 12 },
-    { name: "Marketing", value: 8 },
-    { name: "Finance", value: 5 },
-    { name: "RH", value: 3 },
-  ]
-
-  const demoLineData: LineChartData[] = [
-    { name: "Jan", Candidats: 5 },
-    { name: "Fév", Candidats: 8 },
-    { name: "Mar", Candidats: 12 },
-    { name: "Avr", Candidats: 10 },
-    { name: "Mai", Candidats: 15 },
-  ]
-
-  const demoNiveauData: ChartData[] = [
-    { name: "Bac", value: 5 },
-    { name: "Bac+2", value: 12 },
-    { name: "Bac+3", value: 8 },
-    { name: "Bac+5", value: 15 },
-    { name: "Doctorat", value: 3 },
-  ]
-
-  const demoOffreData: ChartData[] = [
-    { name: "Développeur Frontend", value: 7 },
-    { name: "Développeur Backend", value: 5 },
-    { name: "Data Scientist", value: 3 },
-    { name: "Chef de Projet", value: 4 },
-  ]
+  const [loading, setLoading] = useState(true)
 
   // Fonction pour charger les données
   const loadData = async () => {
     setRefreshing(true)
     setError(false)
+    setLoading(true)
+
     try {
       const token = sessionStorage.getItem("token")
       if (!token) {
         console.error("Aucun token trouvé")
         setError(true)
         setRefreshing(false)
+        setLoading(false)
         return
       }
 
@@ -87,14 +60,14 @@ export function DashboardCharts({ isAdmin = false }) {
           if (Array.isArray(deptData) && deptData.length > 0) {
             setCandidatsParDepartement(deptData)
           } else {
-            setCandidatsParDepartement(demoData)
+            setCandidatsParDepartement([])
           }
         } else {
-          setCandidatsParDepartement(demoData)
+          setCandidatsParDepartement([])
         }
       } catch (e) {
         console.error("Erreur lors du chargement des candidats par département:", e)
-        setCandidatsParDepartement(demoData)
+        setCandidatsParDepartement([])
       }
 
       try {
@@ -109,14 +82,14 @@ export function DashboardCharts({ isAdmin = false }) {
           if (Array.isArray(moisData) && moisData.length > 0) {
             setCandidatsParMois(moisData)
           } else {
-            setCandidatsParMois(demoLineData)
+            setCandidatsParMois([])
           }
         } else {
-          setCandidatsParMois(demoLineData)
+          setCandidatsParMois([])
         }
       } catch (e) {
         console.error("Erreur lors du chargement des candidats par mois:", e)
-        setCandidatsParMois(demoLineData)
+        setCandidatsParMois([])
       }
 
       // Charger les données de niveau d'études
@@ -132,14 +105,14 @@ export function DashboardCharts({ isAdmin = false }) {
           if (Array.isArray(niveauData) && niveauData.length > 0) {
             setCandidatsParNiveau(niveauData)
           } else {
-            setCandidatsParNiveau(demoNiveauData)
+            setCandidatsParNiveau([])
           }
         } else {
-          setCandidatsParNiveau(demoNiveauData)
+          setCandidatsParNiveau([])
         }
       } catch (e) {
         console.error("Erreur lors du chargement des candidats par niveau:", e)
-        setCandidatsParNiveau(demoNiveauData)
+        setCandidatsParNiveau([])
       }
 
       // Charger les données de candidats par poste
@@ -171,6 +144,7 @@ export function DashboardCharts({ isAdmin = false }) {
       setError(true)
     } finally {
       setRefreshing(false)
+      setLoading(false)
     }
   }
 
@@ -224,7 +198,17 @@ export function DashboardCharts({ isAdmin = false }) {
           <div className="flex-grow">
             <TabsContent value="departements" className="h-full">
               <div className="h-[350px]">
-                {candidatsParDepartement.length > 0 ? (
+                {loading ? (
+                  <div className="flex h-full items-center justify-center">
+                    <div className="space-y-4 w-full">
+                      <Skeleton className="h-[250px] w-full" />
+                    </div>
+                  </div>
+                ) : error ? (
+                  <div className="flex h-full items-center justify-center">
+                    <p className="text-red-500">Erreur lors du chargement des données</p>
+                  </div>
+                ) : candidatsParDepartement.length > 0 ? (
                   <BarChart
                     data={candidatsParDepartement}
                     index="name"
@@ -236,13 +220,7 @@ export function DashboardCharts({ isAdmin = false }) {
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center">
-                    {error ? (
-                      <p className="text-red-500">Erreur lors du chargement des données</p>
-                    ) : (
-                      <div className="space-y-4 w-full">
-                        <Skeleton className="h-[250px] w-full" />
-                      </div>
-                    )}
+                    <p className="text-muted-foreground">Aucune donnée disponible</p>
                   </div>
                 )}
               </div>
@@ -250,7 +228,17 @@ export function DashboardCharts({ isAdmin = false }) {
 
             <TabsContent value="tendances" className="h-full">
               <div className="h-[350px]">
-                {candidatsParMois.length > 0 ? (
+                {loading ? (
+                  <div className="flex h-full items-center justify-center">
+                    <div className="space-y-4 w-full">
+                      <Skeleton className="h-[250px] w-full" />
+                    </div>
+                  </div>
+                ) : error ? (
+                  <div className="flex h-full items-center justify-center">
+                    <p className="text-red-500">Erreur lors du chargement des données</p>
+                  </div>
+                ) : candidatsParMois.length > 0 ? (
                   <LineChart
                     data={candidatsParMois}
                     index="name"
@@ -262,13 +250,7 @@ export function DashboardCharts({ isAdmin = false }) {
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center">
-                    {error ? (
-                      <p className="text-red-500">Erreur lors du chargement des données</p>
-                    ) : (
-                      <div className="space-y-4 w-full">
-                        <Skeleton className="h-[250px] w-full" />
-                      </div>
-                    )}
+                    <p className="text-muted-foreground">Aucune donnée disponible</p>
                   </div>
                 )}
               </div>
@@ -276,7 +258,17 @@ export function DashboardCharts({ isAdmin = false }) {
 
             <TabsContent value="niveau" className="h-full">
               <div className="h-[350px]">
-                {candidatsParNiveau.length > 0 ? (
+                {loading ? (
+                  <div className="flex h-full items-center justify-center">
+                    <div className="space-y-4 w-full">
+                      <Skeleton className="h-[250px] w-full rounded-full mx-auto max-w-[250px]" />
+                    </div>
+                  </div>
+                ) : error ? (
+                  <div className="flex h-full items-center justify-center">
+                    <p className="text-red-500">Erreur lors du chargement des données</p>
+                  </div>
+                ) : candidatsParNiveau.length > 0 ? (
                   <>
                     <div className="mb-2 text-sm text-muted-foreground">
                       {candidatsParNiveau.length} niveaux d'études trouvés
@@ -292,13 +284,7 @@ export function DashboardCharts({ isAdmin = false }) {
                   </>
                 ) : (
                   <div className="flex h-full items-center justify-center">
-                    {error ? (
-                      <p className="text-red-500">Erreur lors du chargement des données</p>
-                    ) : (
-                      <div className="space-y-4 w-full">
-                        <Skeleton className="h-[250px] w-full rounded-full mx-auto max-w-[250px]" />
-                      </div>
-                    )}
+                    <p className="text-muted-foreground">Aucune donnée disponible</p>
                   </div>
                 )}
               </div>
@@ -306,7 +292,17 @@ export function DashboardCharts({ isAdmin = false }) {
 
             <TabsContent value="postes" className="h-full">
               <div className="h-[350px]">
-                {candidatsParOffre.length > 0 ? (
+                {loading ? (
+                  <div className="flex h-full items-center justify-center">
+                    <div className="space-y-4 w-full">
+                      <Skeleton className="h-[250px] w-full" />
+                    </div>
+                  </div>
+                ) : error ? (
+                  <div className="flex h-full items-center justify-center">
+                    <p className="text-red-500">Erreur lors du chargement des données</p>
+                  </div>
+                ) : candidatsParOffre.length > 0 ? (
                   <BarChart
                     data={candidatsParOffre}
                     index="name"
@@ -318,13 +314,7 @@ export function DashboardCharts({ isAdmin = false }) {
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center">
-                    {error ? (
-                      <p className="text-red-500">Erreur lors du chargement des données</p>
-                    ) : (
-                      <div className="space-y-4 w-full">
-                        <Skeleton className="h-[250px] w-full" />
-                      </div>
-                    )}
+                    <p className="text-muted-foreground">Aucune donnée disponible</p>
                   </div>
                 )}
               </div>
