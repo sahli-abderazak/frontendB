@@ -1,64 +1,16 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { AdminStats } from "../components/bi/admin-stats"
+import { CandidatesByDepartment } from "../components/bi/candidates-by-department"
+import { CandidatesByLevel } from "../components/bi/candidates-by-level"
+import { CandidatesByMonth } from "../components/bi/candidates-by-month"
+import { InterviewsByStatus } from "../components/bi/interviews-by-status"
+import { OffersByDepartment } from "../components/bi/offers-by-department"
 import { DashboardHeader } from "../components/dashboard-header"
 import { DashboardSidebar } from "../components/dashboard-sidebar"
-import { StatsCards } from "../components/bi/stats-cards"
 import { WelcomeBanner } from "../components/welcome-banner"
-import { DashboardCharts } from "../components/bi/dashboard-charts"
-import { DetailedStats } from "../components/bi/detailed-stats"
 
-export default function AdminDashboard() {
-  const router = useRouter()
-  const [shouldRender, setShouldRender] = useState(false)
 
-  useEffect(() => {
-    // Vérifier le rôle de l'utilisateur avant de rendre la page
-    const checkUserRole = async () => {
-      try {
-        const token = sessionStorage.getItem("token")
-        if (!token) {
-          // Rediriger vers la page de connexion si pas de token
-          router.push("/")
-          return
-        }
 
-        const response = await fetch("http://127.0.0.1:8000/api/users/profile", {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (!response.ok) {
-          throw new Error("Erreur lors de la récupération des données")
-        }
-
-        const userData = await response.json()
-
-        // Si l'utilisateur est un admin, autoriser le rendu de la page
-        if (userData.role === "admin") {
-          setShouldRender(true)
-        } else {
-          // Si autre rôle, rediriger vers la page d'accueil
-          router.push("/dashboard/recruteur")
-        }
-      } catch (error) {
-        console.error("Erreur:", error)
-        // En cas d'erreur, rediriger vers la page d'accueil
-        router.push("/")
-      }
-    }
-
-    checkUserRole()
-  }, [router])
-
-  // Ne rien afficher jusqu'à ce que la vérification soit terminée
-  if (!shouldRender) {
-    return null
-  }
-
+export default function AdminDashboardPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       <DashboardHeader />
@@ -76,19 +28,27 @@ export default function AdminDashboard() {
             {/* Welcome Banner */}
             <WelcomeBanner />
 
-            {/* Stats Cards */}
+            {/* Admin Stats */}
             <div className="grid gap-6">
-              <StatsCards isAdmin={true} />
+              <AdminStats />
             </div>
 
-            {/* Charts Section */}
-            <div className="grid gap-6">
-              <DashboardCharts isAdmin={true} />
+
+            {/* Charts Section - First Row */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              <CandidatesByDepartment />
+              <OffersByDepartment />
             </div>
 
-            {/* Detailed Stats Section */}
+            {/* Charts Section - Second Row */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              <CandidatesByMonth />
+              <InterviewsByStatus />
+            </div>
+
+            {/* Charts Section - Third Row */}
             <div className="grid gap-6">
-              <DetailedStats isAdmin={true} />
+              <CandidatesByLevel />
             </div>
           </div>
         </div>

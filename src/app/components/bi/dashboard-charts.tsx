@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { BarChart, LineChart, DonutChart } from "@/components/ui/chart"
+import { BarChart, LineChart, DonutChart } from "@/components/ui/chart1"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"

@@ -16,6 +16,18 @@ import { cn } from "@/lib/utils"
 import "../../components/styles/index.css"
 import "../../components/styles/jobsDetail.css"
 
+// Add shake animation
+const shakeAnimation = `
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+  }
+  .shake-error {
+    animation: shake 0.6s cubic-bezier(.36,.07,.19,.97) both;
+  }
+`
+
 interface OffreDetail {
   id: number
   poste: string
@@ -63,7 +75,8 @@ export default function JobDetailPage({
   const [file, setFile] = useState(null)
   const [dragActive, setDragActive] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [globalError, setGlobalError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [success, setSuccess] = useState(false)
   const [showErrorDialog, setShowErrorDialog] = useState(false)
   const [candidatId, setCandidatId] = useState<number | null>(null)
@@ -115,15 +128,34 @@ export default function JobDetailPage({
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
+
+    // Clear error for this field when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }))
+    }
   }
 
   const handleSelectChange = (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
+
+    // Clear error for this field when user selects a value
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }))
+    }
   }
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0])
+      const selectedFile = e.target.files[0]
+      const fileExtension = selectedFile.name.split(".").pop().toLowerCase()
+
+      if (fileExtension !== "pdf") {
+        setFieldErrors((prev) => ({ ...prev, cv: "Veuillez sélectionner un fichier PDF uniquement" }))
+        setFile(null)
+      } else {
+        setFieldErrors((prev) => ({ ...prev, cv: "" }))
+        setFile(selectedFile)
+      }
     }
   }
 
@@ -142,7 +174,16 @@ export default function JobDetailPage({
     e.stopPropagation()
     setDragActive(false)
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setFile(e.dataTransfer.files[0])
+      const droppedFile = e.dataTransfer.files[0]
+      const fileExtension = droppedFile.name.split(".").pop().toLowerCase()
+
+      if (fileExtension !== "pdf") {
+        setFieldErrors((prev) => ({ ...prev, cv: "Veuillez sélectionner un fichier PDF uniquement" }))
+        setFile(null)
+      } else {
+        setFieldErrors((prev) => ({ ...prev, cv: "" }))
+        setFile(droppedFile)
+      }
     }
   }
 
@@ -160,7 +201,8 @@ export default function JobDetailPage({
       offre_id: id,
     })
     setFile(null)
-    setError(null)
+    setGlobalError(null)
+    setFieldErrors({})
     setSuccess(false)
     setMatchingScore(null)
   }
@@ -261,21 +303,124 @@ export default function JobDetailPage({
       })
     } catch (error) {
       console.error(`Erreur lors de la redirection vers le test: ${error.message}`)
-      setError("Impossible d'afficher le test de personnalité. Veuillez réessayer plus tard.")
+      setGlobalError("Impossible d'afficher le test de personnalité. Veuillez réessayer plus tard.")
     }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     console.log("Formulaire soumis")
-    setError(null)
+    setGlobalError(null)
+    setFieldErrors({})
     setSuccess(false)
     setSubmitting(true)
 
+    // Validation du formulaire
+    let hasErrors = false
+    const errors: Record<string, string> = {}
+    let firstErrorField: HTMLElement | null = null
+
+    // Vérification des champs obligatoires
+    if (!formData.prenom.trim()) {
+      errors.prenom = "Le prénom est requis"
+      hasErrors = true
+      if (!firstErrorField) firstErrorField = document.getElementById("prenom")
+    }
+
+    if (!formData.nom.trim()) {
+      errors.nom = "Le nom est requis"
+      hasErrors = true
+      if (!firstErrorField) firstErrorField = document.getElementById("nom")
+    }
+
+    if (!formData.email.trim()) {
+      errors.email = "L'email est requis"
+      hasErrors = true
+      if (!firstErrorField) firstErrorField = document.getElementById("email")
+    } else {
+      // Validation de l'email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(formData.email)) {
+        errors.email = "Veuillez entrer une adresse email valide"
+        hasErrors = true
+        if (!firstErrorField) firstErrorField = document.getElementById("email")
+      }
+    }
+
+    if (!formData.ville) {
+      errors.ville = "La ville est requise"
+      hasErrors = true
+      if (!firstErrorField) {
+        const villeElement = document.querySelector('[id^="radix-:"]')
+        if (villeElement) firstErrorField = villeElement as HTMLElement
+      }
+    }
+
+    if (!formData.codePostal.trim()) {
+      errors.codePostal = "Le code postal est requis"
+      hasErrors = true
+      if (!firstErrorField) firstErrorField = document.getElementById("codePostal")
+    }
+
+    if (!formData.tel.trim()) {
+      errors.tel = "Le numéro de téléphone est requis"
+      hasErrors = true
+      if (!firstErrorField) firstErrorField = document.getElementById("tel")
+    } else {
+      // Validation du numéro de téléphone (format tunisien)
+      const phoneRegex = /^[2-9]\d{7}$/
+      if (!phoneRegex.test(formData.tel.replace(/\s/g, ""))) {
+        errors.tel = "Veuillez entrer un numéro de téléphone valide (8 chiffres)"
+        hasErrors = true
+        if (!firstErrorField) firstErrorField = document.getElementById("tel")
+      }
+    }
+
+    if (!formData.niveauEtude) {
+      errors.niveauEtude = "Le niveau d'étude est requis"
+      hasErrors = true
+      if (!firstErrorField) {
+        const niveauEtudeElement = document.querySelector('[id^="radix-:"][aria-controls*="niveauEtude"]')
+        if (niveauEtudeElement) firstErrorField = niveauEtudeElement as HTMLElement
+      }
+    }
+
+    if (!formData.niveauExperience) {
+      errors.niveauExperience = "Le niveau d'expérience est requis"
+      hasErrors = true
+      if (!firstErrorField) {
+        const niveauExpElement = document.querySelector('[id^="radix-:"][aria-controls*="niveauExperience"]')
+        if (niveauExpElement) firstErrorField = niveauExpElement as HTMLElement
+      }
+    }
+
     if (!file) {
-      console.log("Erreur: Pas de fichier CV")
-      setError("Veuillez sélectionner un CV")
+      errors.cv = "Veuillez sélectionner un CV"
+      hasErrors = true
+      if (!firstErrorField) firstErrorField = document.getElementById("cv-container")
+    } else {
+      const fileExtension = file.name.split(".").pop().toLowerCase()
+      if (fileExtension !== "pdf") {
+        errors.cv = "Le CV doit être au format PDF"
+        hasErrors = true
+        if (!firstErrorField) firstErrorField = document.getElementById("cv-container")
+      }
+    }
+
+    if (hasErrors) {
+      setFieldErrors(errors)
       setSubmitting(false)
+
+      // Focus sur le premier champ avec erreur
+      if (firstErrorField) {
+        firstErrorField.scrollIntoView({ behavior: "smooth", block: "center" })
+        setTimeout(() => {
+          if (firstErrorField.focus) {
+            firstErrorField.focus()
+          }
+        }, 500)
+      }
+
       return
     }
 
@@ -339,7 +484,7 @@ export default function JobDetailPage({
             setShowMatchingErrorDialog(true)
           }, 300) // Petit délai pour permettre au modal de se fermer d'abord
         } else {
-          setError(data.error || "Erreur lors de l'envoi de la candidature")
+          setGlobalError(data.error || "Erreur lors de l'envoi de la candidature")
           throw new Error(data.error || "Erreur lors de l'envoi de la candidature")
         }
       } else {
@@ -421,6 +566,7 @@ export default function JobDetailPage({
 
   return (
     <div className="job-detail-page">
+      <style>{shakeAnimation}</style>
       <Header />
       {/* Job Detail Section */}
       <section className="job-detail-section">
@@ -538,7 +684,7 @@ export default function JobDetailPage({
                         <li>
                           <MapPin className="icon" />
                           <h5>Emplacement:</h5>
-                          <span>{`${offre.pays || ""}, ${offre.ville || ""}`}</span>
+                          <span>{`${offre.departement || ""}, ${offre.ville || ""}`}</span>
                         </li>
                         <li>
                           <User className="icon" />
@@ -618,11 +764,11 @@ export default function JobDetailPage({
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6" encType="multipart/form-data">
-              {error && !showErrorDialog && (
+              {globalError && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Erreur</AlertTitle>
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription>{globalError}</AlertDescription>
                 </Alert>
               )}
 
@@ -631,16 +777,52 @@ export default function JobDetailPage({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="prenom">Prénom</Label>
-                    <Input id="prenom" name="prenom" value={formData.prenom} onChange={handleChange} required />
+                    <Input
+                      id="prenom"
+                      name="prenom"
+                      value={formData.prenom}
+                      onChange={handleChange}
+                      required
+                      className={cn(
+                        fieldErrors.prenom ? "border-red-500 focus-visible:ring-red-500 shake-error" : "",
+                        "transition-all",
+                      )}
+                    />
+                    {fieldErrors.prenom && (
+                      <p className="text-sm font-medium text-red-500 mt-1">{fieldErrors.prenom}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="nom">Nom</Label>
-                    <Input id="nom" name="nom" value={formData.nom} onChange={handleChange} required />
+                    <Input
+                      id="nom"
+                      name="nom"
+                      value={formData.nom}
+                      onChange={handleChange}
+                      required
+                      className={cn(
+                        fieldErrors.nom ? "border-red-500 focus-visible:ring-red-500 shake-error" : "",
+                        "transition-all",
+                      )}
+                    />
+                    {fieldErrors.nom && <p className="text-sm font-medium text-red-500 mt-1">{fieldErrors.nom}</p>}
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Adresse email</Label>
-                  <Input type="email" id="email" name="email" value={formData.email} onChange={handleChange} required />
+                  <Input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                    className={cn(
+                      fieldErrors.email ? "border-red-500 focus-visible:ring-red-500 shake-error" : "",
+                      "transition-all",
+                    )}
+                  />
+                  {fieldErrors.email && <p className="text-sm font-medium text-red-500 mt-1">{fieldErrors.email}</p>}
                 </div>
               </div>
 
@@ -654,7 +836,12 @@ export default function JobDetailPage({
                   <div className="space-y-2">
                     <Label htmlFor="ville">Ville</Label>
                     <Select value={formData.ville} onValueChange={(value) => handleSelectChange("ville", value)}>
-                      <SelectTrigger>
+                      <SelectTrigger
+                        className={cn(
+                          fieldErrors.ville ? "border-red-500 focus-visible:ring-red-500 shake-error" : "",
+                          "transition-all",
+                        )}
+                      >
                         <SelectValue placeholder="Sélectionnez une ville" />
                       </SelectTrigger>
                       <SelectContent>
@@ -684,6 +871,7 @@ export default function JobDetailPage({
                         <SelectItem value="Manouba">Manouba</SelectItem>
                       </SelectContent>
                     </Select>
+                    {fieldErrors.ville && <p className="text-sm font-medium text-red-500 mt-1">{fieldErrors.ville}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="codePostal">Code postal</Label>
@@ -693,7 +881,14 @@ export default function JobDetailPage({
                       value={formData.codePostal}
                       onChange={handleChange}
                       required
+                      className={cn(
+                        fieldErrors.codePostal ? "border-red-500 focus-visible:ring-red-500 shake-error" : "",
+                        "transition-all",
+                      )}
                     />
+                    {fieldErrors.codePostal && (
+                      <p className="text-sm font-medium text-red-500 mt-1">{fieldErrors.codePostal}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -702,7 +897,19 @@ export default function JobDetailPage({
                 <h3 className="text-lg font-medium">Téléphone</h3>
                 <div className="space-y-2">
                   <Label htmlFor="tel">Téléphone</Label>
-                  <Input type="tel" id="tel" name="tel" value={formData.tel} onChange={handleChange} required />
+                  <Input
+                    type="tel"
+                    id="tel"
+                    name="tel"
+                    value={formData.tel}
+                    onChange={handleChange}
+                    required
+                    className={cn(
+                      fieldErrors.tel ? "border-red-500 focus-visible:ring-red-500 shake-error" : "",
+                      "transition-all",
+                    )}
+                  />
+                  {fieldErrors.tel && <p className="text-sm font-medium text-red-500 mt-1">{fieldErrors.tel}</p>}
                 </div>
               </div>
 
@@ -715,7 +922,12 @@ export default function JobDetailPage({
                       value={formData.niveauEtude}
                       onValueChange={(value) => handleSelectChange("niveauEtude", value)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger
+                        className={cn(
+                          fieldErrors.niveauEtude ? "border-red-500 focus-visible:ring-red-500 shake-error" : "",
+                          "transition-all",
+                        )}
+                      >
                         <SelectValue placeholder="Sélectionnez" />
                       </SelectTrigger>
                       <SelectContent>
@@ -729,6 +941,9 @@ export default function JobDetailPage({
                         <SelectItem value="BAC+5">BAC+5</SelectItem>
                       </SelectContent>
                     </Select>
+                    {fieldErrors.niveauEtude && (
+                      <p className="text-sm font-medium text-red-500 mt-1">{fieldErrors.niveauEtude}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="niveauExperience">Niveau d'éxperience</Label>
@@ -736,7 +951,12 @@ export default function JobDetailPage({
                       value={formData.niveauExperience}
                       onValueChange={(value) => handleSelectChange("niveauExperience", value)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger
+                        className={cn(
+                          fieldErrors.niveauExperience ? "border-red-500 focus-visible:ring-red-500 shake-error" : "",
+                          "transition-all",
+                        )}
+                      >
                         <SelectValue placeholder="Sélectionnez" />
                       </SelectTrigger>
                       <SelectContent>
@@ -749,6 +969,9 @@ export default function JobDetailPage({
                         <SelectItem value="plus_de_5ans">Plus de 5ans</SelectItem>
                       </SelectContent>
                     </Select>
+                    {fieldErrors.niveauExperience && (
+                      <p className="text-sm font-medium text-red-500 mt-1">{fieldErrors.niveauExperience}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -756,10 +979,15 @@ export default function JobDetailPage({
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">CV</h3>
                 <div
+                  id="cv-container"
                   className={cn(
                     "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors",
-                    dragActive ? "border-primary bg-primary/5" : "border-gray-300 hover:border-primary/50",
-                    file && "border-green-500 bg-green-50",
+                    dragActive
+                      ? "border-primary bg-primary/5"
+                      : fieldErrors.cv
+                        ? "border-red-500 bg-red-50 shake-error"
+                        : "border-gray-300 hover:border-primary/50",
+                    file && !fieldErrors.cv && "border-green-500 bg-green-50",
                   )}
                   onDragEnter={handleDrag}
                   onDragLeave={handleDrag}
@@ -767,24 +995,27 @@ export default function JobDetailPage({
                   onDrop={handleDrop}
                   onClick={() => document.getElementById("cv").click()}
                 >
-                  <input
-                    type="file"
-                    id="cv"
-                    name="cv"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    accept=".pdf,.doc,.docx"
-                  />
+                  <input type="file" id="cv" name="cv" onChange={handleFileChange} className="hidden" accept=".pdf" />
                   <div className="flex flex-col items-center justify-center gap-2">
-                    <Upload className={cn("h-10 w-10", file ? "text-green-500" : "text-gray-400")} />
+                    <Upload
+                      className={cn(
+                        "h-10 w-10",
+                        fieldErrors.cv ? "text-red-500" : file ? "text-green-500" : "text-gray-400",
+                      )}
+                    />
                     <div className="space-y-1">
-                      <p className="font-medium">{file ? "Fichier sélectionné" : "Parcourir les fichiers"}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {file ? file.name : "Glissez et déposez votre CV ici ou cliquez pour parcourir"}
+                      <p className={cn("font-medium", fieldErrors.cv && "text-red-500")}>
+                        {file ? "Fichier sélectionné" : "Parcourir les fichiers"}
+                      </p>
+                      <p className={cn("text-sm", fieldErrors.cv ? "text-red-500" : "text-muted-foreground")}>
+                        {file
+                          ? file.name
+                          : "Glissez et déposez votre CV ici ou cliquez pour parcourir (format PDF uniquement)"}
                       </p>
                     </div>
                   </div>
                 </div>
+                {fieldErrors.cv && <p className="text-sm font-medium text-red-500 mt-1">{fieldErrors.cv}</p>}
               </div>
 
               <div className="flex justify-end gap-3 pt-4">

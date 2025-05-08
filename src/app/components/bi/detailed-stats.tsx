@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { BarChart, DonutChart } from "@/components/ui/chart"
+import { BarChart, DonutChart } from "@/components/ui/chart1"
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
