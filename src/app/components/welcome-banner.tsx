@@ -17,7 +17,7 @@ export function WelcomeBanner() {
               variant="secondary"
               className="bg-white text-blue-600 hover:bg-blue-50 font-medium shadow-md transition-all"
             >
-              Voir les Rapports
+              Voir le rapport Annuel
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </a>
