@@ -433,15 +433,7 @@ export default function Register() {
                     {isLoading ? <Loader2 className="animate-spin h-5 w-5 mr-3" /> : "S'inscrire"}
                   </Button>
                 </div>
-                <div className="mt-6 space-y-4">
-                  <Button
-                    onClick={handleGoogleLogin}
-                    className="w-full border border-red-500 text-red-500 bg-white hover:bg-red-100 py-3 rounded-lg flex items-center justify-center space-x-2"
-                  >
-                    <Mail className="h-5 w-5" />
-                    <span>S'inscrire avec Google</span>
-                  </Button>
-                </div>
+               
                 <div className="mt-6 text-center">
                   <p className="text-sm text-gray-600">
                     Vous avez déja un compte?{" "}
@@ -493,4 +485,3 @@ export default function Register() {
     </div>
   )
 }
-

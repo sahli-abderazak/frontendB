@@ -52,7 +52,9 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
   const [cheatingDetected, setCheatingDetected] = useState(false)
 
   // Timer state
-  const [timeRemaining, setTimeRemaining] = useState(10 * 60) // 10 minutes in seconds
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null)
+  const [startTime, setStartTime] = useState<number | null>(null)
+  const [totalTime] = useState(10 * 60) // 10 minutes in seconds
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Use refs to track initialization state and prevent multiple API calls
@@ -60,31 +62,173 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
   const questionsInitialized = useRef(false)
   const apiCallInProgress = useRef(false)
 
+  // Remplacer la fonction handleTimeExpired par celle-ci pour calculer et enregistrer les scores par trait
+  const handleTimeExpired = useCallback(async () => {
+    try {
+      // Préparer les données des réponses pour le stockage, y compris les questions sans réponse
+      const answersData = questions.map((question, index) => {
+        const answer = answers[index]
+
+        if (answer) {
+          // Si une réponse existe pour cette question
+          const optionIndex = question.options.findIndex(
+            (opt) => opt.text === answer.text && opt.score === answer.score,
+          )
+
+          return {
+            question_index: index,
+            selected_option_index: optionIndex !== -1 ? optionIndex : 0,
+            score: answer.score,
+            trait: question.trait,
+          }
+        } else {
+          // Si aucune réponse n'existe pour cette question, score = 0
+          return {
+            question_index: index,
+            selected_option_index: -1, // Aucune option sélectionnée
+            score: 0, // Score de 0 pour les questions sans réponse
+            trait: question.trait,
+          }
+        }
+      })
+
+      // Calculer le score total, y compris les 0 pour les questions sans réponse
+      const currentTotalScore = answersData.reduce((total, answer) => total + answer.score, 0)
+
+      // Calculer les scores par trait de personnalité
+      const traitScores: Record<string, number> = {}
+
+      // Initialiser les scores par trait
+      answersData.forEach((answer) => {
+        if (!traitScores[answer.trait]) {
+          traitScores[answer.trait] = 0
+        }
+        traitScores[answer.trait] += answer.score
+      })
+
+      // Ensure we have valid IDs
+      const candidatIdNumber = Number(candidatId)
+      const offreIdNumber = Number(offreId)
+
+      if (isNaN(candidatIdNumber) || isNaN(offreIdNumber)) {
+        throw new Error("Identifiants de candidat ou d'offre invalides")
+      }
+
+      console.log(`Envoi du score pour temps écoulé - candidat ID: ${candidatIdNumber}, offre ID: ${offreIdNumber}`)
+      console.log(`Score total calculé: ${currentTotalScore}, Réponses: ${answersData.length}/${questions.length}`)
+      console.log("Scores par trait:", traitScores)
+
+      const storeScoreResponse = await fetch(`http://127.0.0.1:8000/api/store-score`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          candidat_id: candidatIdNumber,
+          offre_id: offreIdNumber,
+          score_total: currentTotalScore,
+          questions: questions,
+          answers: answersData, // Inclut toutes les questions, même celles sans réponse
+          status: "temps ecoule", // Statut pour temps écoulé
+          trait_scores: traitScores, // Ajouter les scores par trait
+        }),
+      })
+
+      if (!storeScoreResponse.ok) {
+        const errorData = await storeScoreResponse.json()
+        throw new Error(errorData.error || `Erreur HTTP ${storeScoreResponse.status}`)
+      }
+
+      console.log(`Score pour temps écoulé enregistré avec succès`)
+
+      // Nettoyer le localStorage une fois le score enregistré
+      if (testId) {
+        localStorage.setItem(
+          `personality_test_${testId}`,
+          JSON.stringify({
+            questions,
+            answers,
+            lastUpdated: new Date().toISOString(),
+            status: "temps ecoule",
+            startTime: startTime,
+            timeRemaining: 0,
+          }),
+        )
+      }
+    } catch (error) {
+      console.error(`Erreur: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }, [answers, questions, candidatId, offreId, testId, startTime])
+
+  // Ajouter cette fonction après la déclaration des états
+  const checkTimeExpired = useCallback(() => {
+    if (timeRemaining !== null && timeRemaining <= 0 && testStage !== "timeout") {
+      setTestStage("timeout")
+      handleTimeExpired()
+    }
+  }, [timeRemaining, testStage, handleTimeExpired])
+
   // Initialize timer when component mounts
   useEffect(() => {
-    // Start the timer
-    timerRef.current = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          // Time's up - clear interval and set timeout state
-          if (timerRef.current) {
-            clearInterval(timerRef.current)
-          }
-          // Set timeout state which will trigger the timeout UI
-          setTestStage("timeout")
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
+    // Vérifier si un test est en cours dans le localStorage
+    if (testId) {
+      const savedTest = localStorage.getItem(`personality_test_${testId}`)
+      if (savedTest) {
+        try {
+          const parsedTest = JSON.parse(savedTest)
 
-    // Cleanup timer on unmount
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
+          // Restaurer l'heure de départ et calculer le temps restant
+          if (parsedTest.startTime) {
+            const startTimeFromStorage = parsedTest.startTime
+            setStartTime(startTimeFromStorage)
+
+            // Calculer le temps écoulé depuis le début du test
+            const now = Date.now()
+            const elapsedSeconds = Math.floor((now - startTimeFromStorage) / 1000)
+
+            // Calculer le temps restant
+            const remaining = totalTime - elapsedSeconds
+
+            // Si le temps est déjà écoulé, passer directement à l'état timeout
+            if (remaining <= 0) {
+              setTimeRemaining(0)
+              setTestStage("timeout")
+              handleTimeExpired()
+              return
+            }
+
+            setTimeRemaining(remaining)
+          } else {
+            // Aucune heure de départ trouvée, initialiser avec le temps total
+            const newStartTime = Date.now()
+            setStartTime(newStartTime)
+            setTimeRemaining(totalTime)
+
+            // Mettre à jour le localStorage avec l'heure de départ
+            localStorage.setItem(
+              `personality_test_${testId}`,
+              JSON.stringify({
+                ...parsedTest,
+                startTime: newStartTime,
+              }),
+            )
+          }
+        } catch (error) {
+          console.error("Erreur lors de la restauration du timer:", error)
+          setTimeRemaining(totalTime)
+          setStartTime(Date.now())
+        }
+      } else {
+        // Aucun test trouvé, initialiser avec le temps total
+        setTimeRemaining(totalTime)
+        setStartTime(Date.now())
       }
+    } else {
+      // Aucun testId, initialiser avec le temps total
+      setTimeRemaining(totalTime)
+      setStartTime(Date.now())
     }
-  }, [])
+  }, [testId, totalTime, handleTimeExpired])
 
   // Clear timer when test is completed
   useEffect(() => {
@@ -138,7 +282,10 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
   }, [currentQuestionIndex, answers, questions])
 
   // Format time remaining as MM:SS
-  const formatTime = (seconds: number) => {
+  const formatTime = (seconds: number | null) => {
+    if (timeRemaining === null) {
+      return "00:00"
+    }
     const minutes = Math.floor(seconds / 60)
     const remainingSeconds = seconds % 60
     return `${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`
@@ -185,11 +332,27 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
 
         // Si des réponses existent, les restaurer
         if (parsedTest.answers && Array.isArray(parsedTest.answers)) {
-          setAnswers(parsedTest.answers)
+          // S'assurer que les réponses sont des objets valides avec text et score
+          const validatedAnswers = parsedTest.answers.map((answer) => {
+            if (answer && typeof answer === "object" && "text" in answer && "score" in answer) {
+              return answer
+            }
+            return null
+          })
 
-          // Définir l'option sélectionnée pour la question actuelle (qui est 0 au démarrage)
-          if (parsedTest.answers[0]) {
-            setSelectedOption(parsedTest.answers[0])
+          setAnswers(validatedAnswers)
+
+          // Restaurer l'index de la question actuelle s'il existe
+          if (parsedTest.currentQuestionIndex !== undefined) {
+            const questionIndex = Number(parsedTest.currentQuestionIndex)
+            setCurrentQuestionIndex(questionIndex)
+
+            // Définir l'option sélectionnée pour la question actuelle restaurée
+            if (validatedAnswers[questionIndex]) {
+              // On ne définit pas directement l'option ici, car les questions ne sont peut-être pas encore chargées
+              // L'effet ci-dessus s'en chargera une fois que les questions seront disponibles
+              console.log("Réponse trouvée pour la question actuelle:", validatedAnswers[questionIndex])
+            }
           }
         }
 
@@ -198,6 +361,7 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
         return
       }
 
+      // Le reste du code reste inchangé...
       // Aucun test existant, générer un nouveau
       const response = await fetch(`http://127.0.0.1:8000/api/generate-test`, {
         method: "POST",
@@ -224,6 +388,17 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
             setTestStage("completed")
             setTestCompleted(true)
             setCheatingDetected(true)
+
+            // Nettoyer le localStorage pour ce test
+            if (candidatId && offreId) {
+              const testIdPattern = `test_${candidatId}_${offreId}`
+              Object.keys(localStorage).forEach((key) => {
+                if (key.startsWith(`personality_test_${testIdPattern}`)) {
+                  localStorage.removeItem(key)
+                }
+              })
+            }
+
             setLoading(false)
             apiCallInProgress.current = false
             return
@@ -260,8 +435,9 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
           JSON.stringify({
             questions: data.questions,
             answers: new Array(data.questions.length).fill(null),
-            startTime: new Date().toISOString(),
+            startTime: Date.now(),
             status: "in_progress",
+            currentQuestionIndex: 0, // Initialiser l'index de la question actuelle
           }),
         )
       } else {
@@ -280,6 +456,8 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
   const saveTestState = useCallback(() => {
     if (!testId || questions.length === 0) return
 
+    const currentTime = Date.now()
+
     localStorage.setItem(
       `personality_test_${testId}`,
       JSON.stringify({
@@ -287,11 +465,14 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
         answers,
         lastUpdated: new Date().toISOString(),
         status: "in_progress",
+        startTime: startTime,
+        timeRemaining: timeRemaining,
+        currentQuestionIndex: currentQuestionIndex,
       }),
     )
 
-    console.log("État du test sauvegardé dans le localStorage")
-  }, [testId, questions, answers])
+    console.log("État du test sauvegardé dans le localStorage avec temps restant:", timeRemaining)
+  }, [testId, questions, answers, startTime, timeRemaining, currentQuestionIndex])
 
   // Modifier la fonction handleOptionSelect pour sauvegarder après chaque sélection
   const handleOptionSelect = (option: Option) => {
@@ -313,6 +494,9 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
           answers: newAnswers,
           lastUpdated: new Date().toISOString(),
           status: "in_progress",
+          startTime: startTime,
+          timeRemaining: timeRemaining,
+          currentQuestionIndex: currentQuestionIndex, // Ajouter l'index de la question actuelle
         }),
       )
     }, 0)
@@ -330,7 +514,11 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
     newAnswers[currentQuestionIndex] = selectedOption
     setAnswers(newAnswers)
 
-    // Sauvegarder l'état
+    // Déterminer le nouvel index de question
+    const newQuestionIndex =
+      currentQuestionIndex < questions.length - 1 ? currentQuestionIndex + 1 : currentQuestionIndex
+
+    // Sauvegarder l'état avec le nouvel index
     localStorage.setItem(
       `personality_test_${testId}`,
       JSON.stringify({
@@ -338,6 +526,9 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
         answers: newAnswers,
         lastUpdated: new Date().toISOString(),
         status: "in_progress",
+        startTime: startTime,
+        timeRemaining: timeRemaining,
+        currentQuestionIndex: newQuestionIndex, // Utiliser le nouvel index
       }),
     )
 
@@ -359,7 +550,7 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
     }
   }
 
-  // Modifier la fonction submitQcmTest pour marquer le test comme terminé dans localStorage
+  // Modifier la fonction submitQcmTest pour inclure les scores par trait
   const submitQcmTest = async () => {
     try {
       setSubmitting(true)
@@ -373,6 +564,8 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
             answers,
             lastUpdated: new Date().toISOString(),
             status: "completed",
+            startTime: startTime,
+            timeRemaining: timeRemaining,
           }),
         )
       }
@@ -391,9 +584,30 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
             question_index: index,
             selected_option_index: optionIndex !== -1 ? optionIndex : 0,
             score: answer.score,
+            trait: questions[index].trait, // Ajouter le trait pour le calcul des scores par dimension
           }
         })
         .filter((a) => a !== null)
+
+      // Calculer les scores par trait de personnalité
+      const traitScores: Record<string, { score: number; count: number }> = {}
+
+      // Initialiser les compteurs pour chaque trait
+      answersData.forEach((answer) => {
+        if (answer && answer.trait) {
+          if (!traitScores[answer.trait]) {
+            traitScores[answer.trait] = { score: 0, count: 0 }
+          }
+          traitScores[answer.trait].score += answer.score
+          traitScores[answer.trait].count += 1
+        }
+      })
+
+      // Calculer les scores moyens par trait
+      const finalTraitScores: Record<string, number> = {}
+      Object.keys(traitScores).forEach((trait) => {
+        finalTraitScores[trait] = traitScores[trait].score
+      })
 
       // Le reste de la fonction reste inchangé...
       // Ensure we have valid IDs
@@ -405,6 +619,7 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
       }
 
       console.log(`Envoi du score pour candidat ID: ${candidatIdNumber}, offre ID: ${offreIdNumber}`)
+      console.log("Scores par trait:", finalTraitScores)
 
       // Nous n'avons plus besoin de calculer les scores ici, le backend s'en chargera
       // avec la nouvelle formule de pourcentage
@@ -419,6 +634,8 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
           score_total: totalScore,
           questions: questions, // Envoyer toutes les questions
           answers: answersData, // Envoyer toutes les réponses avec les index
+          status: "terminer", // Ajouter le statut "terminer"
+          trait_scores: finalTraitScores, // Ajouter les scores par trait
         }),
       })
 
@@ -463,7 +680,7 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
     }
   }
 
-  // Ajouter une fonction pour soumettre le test en cas de fin forcée
+  // Modifier la fonction submitForcedEndTest pour inclure les scores par trait
   const submitForcedEndTest = async (violations: Record<string, number>) => {
     try {
       setSubmitting(true)
@@ -482,12 +699,33 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
             question_index: index,
             selected_option_index: optionIndex !== -1 ? optionIndex : 0,
             score: answer.score,
+            trait: questions[index].trait, // Ajouter le trait pour le calcul des scores par dimension
           }
         })
         .filter((a) => a !== null)
 
       // Calculer le score total des réponses données
       const currentTotalScore = answers.reduce((total, answer) => total + (answer ? answer.score : 0), 0)
+
+      // Calculer les scores par trait de personnalité
+      const traitScores: Record<string, { score: number; count: number }> = {}
+
+      // Initialiser les compteurs pour chaque trait
+      answersData.forEach((answer) => {
+        if (answer && answer.trait) {
+          if (!traitScores[answer.trait]) {
+            traitScores[answer.trait] = { score: 0, count: 0 }
+          }
+          traitScores[answer.trait].score += answer.score
+          traitScores[answer.trait].count += 1
+        }
+      })
+
+      // Calculer les scores moyens par trait
+      const finalTraitScores: Record<string, number> = {}
+      Object.keys(traitScores).forEach((trait) => {
+        finalTraitScores[trait] = traitScores[trait].score
+      })
 
       // Ensure we have valid IDs
       const candidatIdNumber = Number(candidatId)
@@ -498,6 +736,7 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
       }
 
       console.log(`Envoi du score forcé pour candidat ID: ${candidatIdNumber}, offre ID: ${offreIdNumber}`)
+      console.log("Scores par trait:", finalTraitScores)
 
       // Utiliser la même API que pour les tests terminés avec succès
       const storeScoreResponse = await fetch(`http://127.0.0.1:8000/api/store-score`, {
@@ -511,8 +750,9 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
           score_total: currentTotalScore,
           questions: questions,
           answers: answersData,
-          status: "forced_end", // Indiquer que le test a été forcé à se terminer
+          status: "tricher", // Utiliser le statut "tricher"
           security_violations: violations,
+          trait_scores: finalTraitScores, // Ajouter les scores par trait
         }),
       })
 
@@ -591,7 +831,7 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
         newAnswers[currentQuestionIndex] = selectedOption
         setAnswers(newAnswers)
 
-        // Sauvegarder dans localStorage
+        // Sauvegarder dans localStorage avec le nouvel index
         if (testId) {
           localStorage.setItem(
             `personality_test_${testId}`,
@@ -600,6 +840,25 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
               answers: newAnswers,
               lastUpdated: new Date().toISOString(),
               status: "in_progress",
+              startTime: startTime,
+              timeRemaining: timeRemaining,
+              currentQuestionIndex: index, // Utiliser le nouvel index
+            }),
+          )
+        }
+      } else {
+        // Même si aucune option n'est sélectionnée, sauvegarder le nouvel index
+        if (testId) {
+          localStorage.setItem(
+            `personality_test_${testId}`,
+            JSON.stringify({
+              questions,
+              answers,
+              lastUpdated: new Date().toISOString(),
+              status: "in_progress",
+              startTime: startTime,
+              timeRemaining: timeRemaining,
+              currentQuestionIndex: index, // Utiliser le nouvel index
             }),
           )
         }
@@ -626,7 +885,63 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
     console.log(`Security violation: ${type}, count: ${count}`)
   }
 
-  // Ajouter un effet pour gérer la fermeture de la fenêtre
+  // Modifier l'effet du timer pour éviter la référence circulaire
+  // Remplacer l'effet existant par celui-ci:
+
+  // Modifier l'effet du timer pour appeler handleTimeExpired quand le temps est écoulé
+  useEffect(() => {
+    // Vérifier si le test est déjà terminé
+    if (testStage === "completed" || testStage === "timeout") {
+      return
+    }
+
+    // Utiliser requestAnimationFrame pour une meilleure précision
+    let lastUpdateTime = Date.now()
+    let animationFrameId: number
+
+    const updateTimer = () => {
+      const now = Date.now()
+      const deltaTime = now - lastUpdateTime
+
+      // Mettre à jour le timer seulement si au moins 1000ms se sont écoulées
+      if (deltaTime >= 1000) {
+        lastUpdateTime = now
+
+        setTimeRemaining((prev) => {
+          if (!prev || prev <= 1) {
+            // Time's up
+            setTestStage("timeout")
+            // Appeler la fonction pour enregistrer le score avec statut "temps écoulé"
+            setTimeout(() => handleTimeExpired(), 0)
+            return 0
+          }
+
+          // Décrémenter d'une seconde exactement
+          return prev - 1
+        })
+      }
+
+      // Continuer l'animation sauf si le test est terminé
+      if (testStage !== "completed" && testStage !== "timeout") {
+        animationFrameId = requestAnimationFrame(updateTimer)
+      }
+    }
+
+    // Démarrer l'animation
+    animationFrameId = requestAnimationFrame(updateTimer)
+
+    // Cleanup
+    return () => {
+      cancelAnimationFrame(animationFrameId)
+    }
+  }, [testStage, handleTimeExpired])
+
+  // Ajouter cet effet pour vérifier si le temps est écoulé après chaque rendu
+  useEffect(() => {
+    checkTimeExpired()
+  }, [checkTimeExpired])
+
+  // Modifier l'effet pour gérer la fermeture de la fenêtre et inclure les scores par trait
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       // Si le test n'est pas encore terminé, enregistrer le score
@@ -634,29 +949,54 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
         // Calculer le score actuel
         const currentTotalScore = answers.reduce((total, answer) => total + (answer ? answer.score : 0), 0)
 
+        // Préparer les données des réponses pour le calcul des scores par trait
+        const answersWithTraits = answers
+          .map((answer, index) => {
+            if (!answer) return null
+            const optionIndex = questions[index]?.options.findIndex(
+              (opt) => opt.text === answer.text && opt.score === answer.score,
+            )
+            return {
+              question_index: index,
+              selected_option_index: optionIndex !== -1 ? optionIndex : 0,
+              score: answer.score,
+              trait: questions[index].trait,
+            }
+          })
+          .filter((a) => a !== null)
+
+        // Calculer les scores par trait de personnalité
+        const traitScores: Record<string, { score: number; count: number }> = {}
+
+        // Initialiser les compteurs pour chaque trait
+        answersWithTraits.forEach((answer) => {
+          if (answer && answer.trait) {
+            if (!traitScores[answer.trait]) {
+              traitScores[answer.trait] = { score: 0, count: 0 }
+            }
+            traitScores[answer.trait].score += answer.score
+            traitScores[answer.trait].count += 1
+          }
+        })
+
+        // Calculer les scores moyens par trait
+        const finalTraitScores: Record<string, number> = {}
+        Object.keys(traitScores).forEach((trait) => {
+          finalTraitScores[trait] = traitScores[trait].score
+        })
+
         // Envoyer une requête pour enregistrer le score en utilisant l'API existante
         navigator.sendBeacon(
-          "http://127.0.0.1:8000/api/score-zero",
+          "http://127.0.0.1:8000/api/store-score",
           JSON.stringify({
             candidat_id: candidatId,
             offre_id: offreId,
             score_total: currentTotalScore,
             questions: questions,
-            answers: answers
-              .map((answer, index) => {
-                if (!answer) return null
-                const optionIndex = questions[index]?.options.findIndex(
-                  (opt) => opt.text === answer.text && opt.score === answer.score,
-                )
-                return {
-                  question_index: index,
-                  selected_option_index: optionIndex !== -1 ? optionIndex : 0,
-                  score: answer.score,
-                }
-              })
-              .filter((a) => a !== null),
-            status: "abandoned", // Indiquer que le test a été abandonné
+            answers: answersWithTraits,
+            status: "tricher", // Considérer l'abandon comme une triche
             security_violations: securityViolations,
+            trait_scores: finalTraitScores, // Ajouter les scores par trait
           }),
         )
       }
@@ -731,6 +1071,9 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
             answers,
             lastUpdated: new Date().toISOString(),
             status: "in_progress",
+            startTime: startTime,
+            timeRemaining: timeRemaining,
+            currentQuestionIndex: currentQuestionIndex, // Ajouter l'index de la question actuelle
           }),
         )
         console.log("Sauvegarde automatique effectuée")
@@ -738,7 +1081,7 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
     }, 30000)
 
     return () => clearInterval(autoSaveInterval)
-  }, [testId, questions, answers, testCompleted, testForcedToEnd])
+  }, [testId, questions, answers, testCompleted, testForcedToEnd, startTime, timeRemaining, currentQuestionIndex])
 
   // Fonction pour afficher le message de triche détectée
   const renderCheatingDetectedMessage = () => {
@@ -790,14 +1133,25 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
 
   // Render timeout screen
   if (testStage === "timeout") {
+    // Calculer le score pour l'affichage
+    const answeredQuestions = answers.filter((answer) => answer !== null).length
+    const totalQuestions = questions.length
+    const scoreTotal = answers.reduce((total, answer) => total + (answer ? answer.score : 0), 0)
+    const maxPossibleScore = totalQuestions * 5 // 5 est le score maximum par question
+    const scorePercentage = maxPossibleScore > 0 ? Math.round((scoreTotal / maxPossibleScore) * 100) : 0
+
     return (
       <div className="flex flex-col items-center justify-center p-8 space-y-6 text-center">
         <div className="flex items-center justify-center h-16 w-16 rounded-full bg-red-100">
           <AlertCircle className="h-8 w-8 text-red-600" />
         </div>
         <h3 className="text-2xl font-bold">Temps écoulé</h3>
+
+
         <p className="text-muted-foreground">
-          Le temps alloué pour ce test est écoulé. Votre candidature n'a pas pu être complétée.
+          Le temps alloué pour ce test est écoulé. Votre candidature a été enregistrée avec les réponses que vous avez
+          fournies. N'hésitez pas à consulter votre email, nous vous enverrons bientôt une notification concernant votre
+          acceptation ou rejet pour un entretien présentiel.
         </p>
         <Button variant="outline" onClick={() => window.history.back()}>
           Retour
@@ -881,7 +1235,7 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
         <div className="flex items-center justify-center h-16 w-16 rounded-full bg-green-100">
           <CheckCircle2 className="h-8 w-8 text-green-600" />
         </div>
-        <h3 className="text-2xl font-bold">Test terminé avec succès !</h3>
+        <h3 className="text-2xl font-bold">Test terminé !</h3>
         <p className="text-muted-foreground mb-6">
           Votre candidature a été enregistrée avec succès. N'hésitez pas à consulter votre email, nous vous enverrons
           bientôt une notification concernant votre acceptation ou rejet pour un entretien présentiel.
@@ -995,30 +1349,35 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
         <div className="border rounded-lg p-6 space-y-6 shadow-sm">
           <div className="space-y-2">
             <h4 className="text-lg font-medium">{currentQuestion.question}</h4>
-            <p className="text-sm text-muted-foreground">Trait: {currentQuestion.trait}</p>
           </div>
 
           <div className="space-y-3">
-            {currentQuestion.options.map((option, index) => (
-              <div
-                key={index}
-                className={`flex items-center p-3 rounded-md border cursor-pointer transition-colors ${
-                  selectedOption === option ? "bg-primary/10 border-primary" : "hover:bg-muted/50"
-                }`}
-                onClick={() => handleOptionSelect(option)}
-              >
-                <div className="flex-shrink-0 mr-3">
-                  <div
-                    className={`h-5 w-5 rounded-full border flex items-center justify-center ${
-                      selectedOption === option ? "border-primary" : "border-muted-foreground"
-                    }`}
-                  >
-                    {selectedOption === option && <div className="h-3 w-3 rounded-full bg-primary"></div>}
+            {currentQuestion.options.map((option, index) => {
+              // Vérifier si cette option correspond à la réponse sauvegardée
+              const isSelected =
+                selectedOption && selectedOption.text === option.text && selectedOption.score === option.score
+
+              return (
+                <div
+                  key={index}
+                  className={`flex items-center p-3 rounded-md border cursor-pointer transition-colors ${
+                    isSelected ? "bg-blue-100 border-blue-500" : "hover:bg-gray-50"
+                  }`}
+                  onClick={() => handleOptionSelect(option)}
+                >
+                  <div className="flex-shrink-0 mr-3">
+                    <div
+                      className={`h-5 w-5 rounded-full flex items-center justify-center ${
+                        isSelected ? "bg-blue-500" : "border border-gray-300"
+                      }`}
+                    >
+                      {isSelected && <div className="h-2 w-2 rounded-full bg-white"></div>}
+                    </div>
                   </div>
+                  <span className="text-sm">{option.text}</span>
                 </div>
-                <span className="text-sm">{option.text}</span>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {error && (
@@ -1060,10 +1419,10 @@ const PersonalityTest: React.FC<PersonalityTestProps> = ({ candidatId, offreId, 
               key={index}
               className={`h-8 w-8 rounded-full flex items-center justify-center text-sm cursor-pointer transition-colors ${
                 index === currentQuestionIndex
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-blue-500 text-white"
                   : answers[index]
-                    ? "bg-primary/20 text-primary-foreground"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
               onClick={() => navigateToQuestion(index)}
             >

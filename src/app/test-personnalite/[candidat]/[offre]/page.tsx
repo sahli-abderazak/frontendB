@@ -33,6 +33,7 @@ export default function TestPersonnalitePage({
   const [alreadyCompletedTest, setAlreadyCompletedTest] = useState(false)
   const [previousScore, setPreviousScore] = useState<number | null>(null)
   const [cheatingDetected, setCheatingDetected] = useState(false)
+  const [testStage, setTestStage] = useState<"test" | "timeout">("test")
 
   // Parse IDs from params, ensuring they're valid numbers
   const candidatId = candidat ? Number.parseInt(candidat, 10) : null
@@ -86,6 +87,19 @@ export default function TestPersonnalitePage({
     )
   }
 
+  // Ajouter cette fonction après les imports mais avant le composant
+  const clearTestFromLocalStorage = (candidatId: number, offreId: number) => {
+    const testIdPattern = `test_${candidatId}_${offreId}`
+
+    // Parcourir tous les éléments du localStorage
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith(`personality_test_${testIdPattern}`)) {
+        localStorage.removeItem(key)
+        console.log(`Test supprimé du localStorage: ${key}`)
+      }
+    })
+  }
+
   // Modifier la fonction useEffect qui vérifie le statut du test pour s'assurer qu'elle fonctionne correctement
   useEffect(() => {
     // Validate IDs
@@ -114,22 +128,22 @@ export default function TestPersonnalitePage({
 
         // Check if there's an error response indicating the test was already taken
         if (!response.ok && data.error) {
-          // If the error message specifically mentions "triche détectée", it means cheating was detected
-          if (data.error.includes("triche détectée")) {
+          // Vérifier le statut du test
+          if (data.status === "tricher") {
+            // Si le statut est "tricher", afficher le message de triche
             setCheatingDetected(true)
+            // Clear any saved test data from localStorage
+            clearTestFromLocalStorage(Number(candidatId), Number(offreId))
             setLoading(false)
             return
-          }
-
-          // If score is 0, it also means cheating was detected
-          if (data.score === 0) {
-            setCheatingDetected(true)
+          } else if (data.status === "temps ecoule") {
+            // Si le statut est "temps ecoule", afficher le message de temps écoulé
+            setTestStage("timeout")
+            setTestCompleted(true)
             setLoading(false)
             return
-          }
-
-          // Otherwise, the test was already completed with a valid score
-          if (data.score) {
+          } else if (data.status === "terminer") {
+            // Si le statut est "terminer", afficher le message de test déjà complété
             setAlreadyCompletedTest(true)
             setPreviousScore(data.score)
             setLoading(false)
@@ -220,7 +234,7 @@ export default function TestPersonnalitePage({
   const saveScoreOnExit = async () => {
     try {
       // Appel à l'API existante pour enregistrer le score en urgence
-      const response = await fetch(`http://127.0.0.1:8000/api/score-zero`, {
+      const response = await fetch(`http://127.0.0.1:8000/api/store-score`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -229,7 +243,9 @@ export default function TestPersonnalitePage({
           candidat_id: candidatId,
           offre_id: offreId,
           score_total: 0, // Score minimal car test abandonné
-          status: "abandoned", // Indiquer que le test a été abandonné
+          questions: [],
+          answers: [],
+          status: "tricher", // Indiquer que le test a été abandonné (considéré comme triche)
           security_violations: securityViolations,
         }),
         // Utiliser keepalive pour s'assurer que la requête est envoyée même si la page se ferme
@@ -322,19 +338,6 @@ export default function TestPersonnalitePage({
       console.error("Erreur lors de la mise à jour de l'évaluation:", error)
       setRatingMessage("Erreur lors de la mise à jour de l'évaluation")
     }
-  }
-
-  // Ajouter cette fonction après les imports mais avant le composant
-  function clearTestFromLocalStorage(candidatId: number, offreId: number) {
-    const testIdPattern = `test_${candidatId}_${offreId}`
-
-    // Parcourir tous les éléments du localStorage
-    Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith(`personality_test_${testIdPattern}`)) {
-        localStorage.removeItem(key)
-        console.log(`Test supprimé du localStorage: ${key}`)
-      }
-    })
   }
 
   return (
@@ -493,7 +496,7 @@ export default function TestPersonnalitePage({
                     <div className="success-icon-container">
                       <CheckCircle2 className="success-icon" />
                     </div>
-                    <h2 className="success-title">Test complété avec succès !</h2>
+                    <h2 className="success-title">Test complété !</h2>
                     <p className="success-message">
                       Merci d'avoir complété le test de personnalité. Votre candidature a été enregistrée et sera
                       examinée par notre équipe. N'hésitez pas à consulter votre email, nous vous enverrons bientôt une

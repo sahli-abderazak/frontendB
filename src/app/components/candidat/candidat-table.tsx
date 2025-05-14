@@ -246,7 +246,7 @@ export function CandidatsTable({ refresh }: { refresh: boolean }) {
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/candidatSupp/${candidatToDelete}`, {
+      const response = await fetch(`http://127.0.0.1:8000/api/candidats/${candidatToDelete}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -491,12 +491,13 @@ export function CandidatsTable({ refresh }: { refresh: boolean }) {
                   </div>
                 </div>
                 <Button
-                  variant="ghost"
+                  variant="destructive"
                   size="sm"
-                  className="h-8 w-8 p-0 rounded-full"
+                  className="h-8 p-0 px-2 rounded-full"
                   onClick={(e) => openDeleteDialog(candidat.id, e)}
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4 mr-1" />
+                  <span className="text-xs">Supprimer</span>
                 </Button>
               </div>
             </CardHeader>
@@ -583,6 +584,15 @@ export function CandidatsTable({ refresh }: { refresh: boolean }) {
                     <Archive className="h-3 w-3 sm:mr-2" />
                     <span className="hidden sm:inline">Archiver</span>
                   </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="flex-1 h-8 px-2"
+                    onClick={(e) => openDeleteDialog(candidat.id, e)}
+                  >
+                    <X className="h-3 w-3 sm:mr-2" />
+                    <span className="hidden sm:inline">Supprimer</span>
+                  </Button>
                 </div>
               ) : (
                 <>
@@ -601,6 +611,7 @@ export function CandidatsTable({ refresh }: { refresh: boolean }) {
                       <Archive className="mr-2 h-4 w-4" />
                       Marquer
                     </Button>
+                    
                   </div>
                 </>
               )}

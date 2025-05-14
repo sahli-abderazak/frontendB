@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle, AlertCircle, Mail, Trash2 } from "lucide-react"
+import { CheckCircle, AlertCircle, Mail, Trash2, Star } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
@@ -24,6 +24,7 @@ interface Temoignage {
   temoignage: string
   valider: boolean
   created_at?: string
+  rate?: number
 }
 
 interface TemoignagesTableProps {
@@ -382,6 +383,19 @@ const TemoignagesTable: React.FC<TemoignagesTableProps> = ({ refresh }) => {
             <CardContent className="pt-2 pb-2 px-7 flex-grow">
               <div className="text-sm leading-relaxed bg-muted/50 p-3 rounded-md h-[160px] overflow-y-auto">
                 {temoignage.temoignage}
+              </div>
+              <div className="mt-2 flex items-center">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <Star
+                    key={index}
+                    className={`h-4 w-4 ${
+                      index < (temoignage.rate || 0) ? "text-yellow-400 fill-yellow-400" : "text-gray-300"
+                    }`}
+                  />
+                ))}
+                <span className="ml-1 text-xs text-muted-foreground">
+                  {temoignage.rate ? `${temoignage.rate}/5` : "Non évalué"}
+                </span>
               </div>
             </CardContent>
             <CardFooter className="flex justify-between border-t pt-3 pb-3 px-4">

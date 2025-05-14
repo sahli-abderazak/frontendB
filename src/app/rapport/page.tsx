@@ -69,8 +69,8 @@ export default function AdminDashboardPage() {
           
           /* Styles pour le contenu à imprimer */
           body, html {
-            width: 100% !important;
-            height: 100% !important;
+            width: 1200 !important;
+            height: 600 !important;
             margin: 0 !important;
             padding: 0 !important;
             overflow: visible !important;

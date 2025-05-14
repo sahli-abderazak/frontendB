@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useEffect, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, Shield } from 'lucide-react'
+import { AlertCircle, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface TestSecurityProps {
@@ -40,7 +40,7 @@ export default function TestSecurity({
 
   const hasExceededMaxViolations = Object.values(violationCounts).some((count) => count >= maxViolations)
 
-  // Fonction pour enregistrer un score de zéro en cas de triche
+  // Fonction pour enregistrer un score de triche
   const handleCheatingDetected = async () => {
     // Éviter d'appeler l'API plusieurs fois
     if (cheatingDetected) return
@@ -48,7 +48,16 @@ export default function TestSecurity({
     setCheatingDetected(true)
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/score-zero", {
+      // Nettoyer le localStorage pour ce test
+      const testIdPattern = `test_${candidatId}_${offreId}`
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith(`personality_test_${testIdPattern}`)) {
+          localStorage.removeItem(key)
+          console.log(`Test supprimé du localStorage: ${key}`)
+        }
+      })
+
+      const response = await fetch("http://127.0.0.1:8000/api/store-score", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -56,6 +65,9 @@ export default function TestSecurity({
         body: JSON.stringify({
           candidat_id: candidatId,
           offre_id: offreId,
+          questions: [],
+          answers: [],
+          status: "tricher",
         }),
       })
 
@@ -165,27 +177,29 @@ export default function TestSecurity({
   const requestFullscreenMode = () => {
     try {
       setFullscreenAttempted(true)
-      
+
       // Utiliser une promesse pour gérer les erreurs de manière asynchrone
-      const requestPromise = document.documentElement.requestFullscreen();
-      
+      const requestPromise = document.documentElement.requestFullscreen()
+
       // Gérer les erreurs potentielles
       requestPromise
         .then(() => {
-          setIsFullscreen(true);
-          console.log("Mode plein écran activé avec succès");
+          setIsFullscreen(true)
+          console.log("Mode plein écran activé avec succès")
         })
         .catch((err) => {
-          console.error("Erreur lors de la demande de plein écran:", err);
+          console.error("Erreur lors de la demande de plein écran:", err)
           // Afficher un message d'erreur à l'utilisateur
-          showTemporaryWarning("Impossible d'activer le mode plein écran. Veuillez autoriser cette fonctionnalité dans votre navigateur.");
-          
+          showTemporaryWarning(
+            "Impossible d'activer le mode plein écran. Veuillez autoriser cette fonctionnalité dans votre navigateur.",
+          )
+
           // Enregistrer comme violation
-          recordViolation("fullscreen_denied");
-        });
+          recordViolation("fullscreen_denied")
+        })
     } catch (error) {
-      console.error("Exception lors de la demande de plein écran:", error);
-      showTemporaryWarning("Votre navigateur ne prend pas en charge le mode plein écran requis pour ce test.");
+      console.error("Exception lors de la demande de plein écran:", error)
+      showTemporaryWarning("Votre navigateur ne prend pas en charge le mode plein écran requis pour ce test.")
     }
   }
 
@@ -232,8 +246,8 @@ export default function TestSecurity({
             <Alert variant="destructive" className="mb-6">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Nous avons détecté des comportements suspects lors de votre tentative. Pour des raisons de
-                sécurité et d'équité, vous ne pouvez plus continuer ce test.
+                Nous avons détecté des comportements suspects lors de votre tentative. Pour des raisons de sécurité et
+                d'équité, vous ne pouvez plus continuer ce test.
               </AlertDescription>
             </Alert>
 
@@ -292,12 +306,8 @@ export default function TestSecurity({
                 >
                   Passer en plein écran
                 </button>
-                
-                {fullscreenAttempted && (
-                  <div >
-                    
-                  </div>
-                )}
+
+                {fullscreenAttempted && <div></div>}
               </div>
             </div>
           )}

@@ -73,9 +73,6 @@ export default function Header() {
               <Link href="/jobs" className="text-sm font-medium hover:text-primary transition-colors">
                 Annonces
               </Link>
-              <Link href="/temoiniage" className="text-sm font-medium hover:text-primary transition-colors">
-                Témoignages
-              </Link>
               <Link href="/contact" className="text-sm font-medium hover:text-primary transition-colors">
                 Contact
               </Link>

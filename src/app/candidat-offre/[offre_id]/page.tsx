@@ -1,11 +1,8 @@
 "use client"
 
 import { DialogTrigger } from "@/components/ui/dialog"
-
 import { DialogFooter } from "@/components/ui/dialog"
-
 import type React from "react"
-
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
@@ -31,7 +28,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Trash2,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -91,6 +87,7 @@ interface Candidat {
     poste: string
     departement: string
   }
+  test_status?: string
 }
 
 interface Offre {
@@ -240,39 +237,43 @@ function InterviewScheduler({
         throw new Error("Vous n'êtes pas connecté")
       }
 
-      // Formater la date et l'heure pour l'API
+      // Format the date exactly as expected by Laravel's date validation
+      // Laravel expects 'Y-m-d H:i:s' format
       const [hours, minutes] = time.split(":")
-      const scheduledDate = date.toISOString().split("T")[0] // Récupérer seulement la partie date (YYYY-MM-DD)
-      const formattedDateTime = `${scheduledDate} ${hours}:${minutes}:00` // Format: "YYYY-MM-DD HH:MM:SS"
+      const formattedDate = new Date(date).toISOString().split("T")[0] // YYYY-MM-DD
+      const formattedDateTime = `${formattedDate} ${hours}:${minutes}:00` // YYYY-MM-DD HH:MM:SS
+
+      console.log("Sending interview request with date:", formattedDateTime) // Debug log
+
+      const requestData = {
+        candidat_id: candidatId,
+        offre_id: offreId,
+        date_heure: formattedDateTime,
+        candidat_email: candidatEmail,
+        candidat_nom: candidatNom,
+        candidat_prenom: candidatPrenom,
+        poste: offrePoste,
+        type: type,
+        lien_ou_adresse: lienOuAdresse,
+      }
+
+      console.log("Request data:", JSON.stringify(requestData)) // Debug log
 
       const response = await fetch("http://127.0.0.1:8000/api/schedule-interview", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
-        body: JSON.stringify({
-          candidat_id: candidatId,
-          offre_id: offreId,
-          date_heure: formattedDateTime, // Utiliser le format "YYYY-MM-DD HH:MM:SS" au lieu de ISO
-          candidat_email: candidatEmail,
-          candidat_nom: candidatNom,
-          candidat_prenom: candidatPrenom,
-          poste: offrePoste,
-          type: type,
-          lien_ou_adresse: lienOuAdresse,
-        }),
+        body: JSON.stringify(requestData),
       })
 
       const data = await response.json()
+      console.log("API response:", data) // Debug log
 
       if (!response.ok) {
-        // Check for specific error messages
-        if (data && data.message) {
-          throw new Error(data.message)
-        } else {
-          throw new Error("Erreur lors de la planification de l'entretien")
-        }
+        throw new Error(data.error || data.message || "Erreur lors de la planification de l'entretien")
       }
 
       setMessage({
@@ -282,7 +283,10 @@ function InterviewScheduler({
       setTimeout(() => setIsOpen(false), 2000)
     } catch (error) {
       console.error("Erreur:", error)
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Une erreur est survenue" })
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Une erreur est survenue",
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -482,7 +486,7 @@ export default function CandidatOffrePage({ params }: { params: Promise<{ offre_
 
   const fetchCandidats = async (token: string) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/candidatsByOffre/${offre_id}`, {
+      const response = await fetch(`http://127.0.0.1:8000/api/candidatsByOffreStatus/${offre_id}`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -1282,6 +1286,19 @@ function CandidatCard({
               <User className="w-5 h-5 mr-2 text-primary" />
               {candidat.prenom} {candidat.nom}
             </CardTitle>
+            {candidat.test_status && (
+              <Badge
+                className={`mt-1 ${
+                  candidat.test_status.toLowerCase() === "temps écoulé"
+                    ? "bg-red-100 text-red-800 border-red-200 hover:bg-red-200"
+                    : candidat.test_status.toLowerCase() === "terminer"
+                      ? "bg-green-100 text-green-800 border-green-200 hover:bg-green-200"
+                      : "bg-blue-100 text-red-800 border-red-200 hover:bg-red-200"
+                }`}
+              >
+                {candidat.test_status}
+              </Badge>
+            )}
           </div>
           <div className="flex gap-2">
             {/* Matching Score Badge */}
@@ -1618,34 +1635,6 @@ function CandidatCard({
                 offreId={offreId}
                 offrePoste={candidat.offre.poste}
               />
-
-              {/* Bouton Supprimer */}
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    Supprimer
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Confirmer la suppression</DialogTitle>
-                    <DialogDescription>
-                      Êtes-vous sûr de vouloir supprimer la candidature de {candidat.prenom} {candidat.nom} ? Cette
-                      action est irréversible.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <Button variant="outline">Annuler</Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => handleDeleteCandidat(candidat.id, candidat.nom, candidat.prenom)}
-                    >
-                      Supprimer
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
             </>
           )}
         </div>
