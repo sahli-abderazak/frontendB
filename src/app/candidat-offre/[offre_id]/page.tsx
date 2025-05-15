@@ -1637,6 +1637,41 @@ function CandidatCard({
               />
             </>
           )}
+
+          {/* Bouton Supprimer */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
+                Supprimer
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Confirmer la suppression</DialogTitle>
+                <DialogDescription>
+                  Êtes-vous sûr de vouloir supprimer le candidat {candidat.prenom} {candidat.nom} ? Cette action est
+                  irréversible et supprimera également toutes les données associées.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-4">
+                <p className="text-sm text-red-600">
+                  Cette action supprimera définitivement le CV, les entretiens, les scores de test et toutes les autres
+                  données liées à ce candidat.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => {}}>
+                  Annuler
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => handleDeleteCandidat(candidat.id, candidat.nom, candidat.prenom)}
+                >
+                  Supprimer définitivement
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </CardFooter>
     </Card>

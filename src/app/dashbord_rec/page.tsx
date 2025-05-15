@@ -114,9 +114,9 @@ export default function RecruiterDashboard() {
             {/* Two Column Layout for Charts and Upcoming Interviews */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
               <div className="lg:col-span-2">
-                <h2 className="text-xl font-semibold text-blue-600 dark:text-blue-400 mb-4">Statistiques</h2>
+                <h2 className="text-xl font-semibold text-blue-600 dark:text-blue-400 mb-4">Analyses détaillées</h2>
                 <div className="h-full">
-                  <DashboardCharts isAdmin={false} />
+                  <DetailedStats isAdmin={false} />
                 </div>
               </div>
 
@@ -130,8 +130,9 @@ export default function RecruiterDashboard() {
 
             {/* Detailed Stats Section */}
             <div className="grid gap-6 mt-8">
-              <h2 className="text-xl font-semibold text-blue-700 dark:text-blue-400">Analyses détaillées</h2>
-              <DetailedStats isAdmin={false} />
+              <h2 className="text-xl font-semibold text-blue-700 dark:text-blue-400">Statistiques</h2>
+              {/* <DetailedStats isAdmin={false} /> */}
+              <DashboardCharts isAdmin={false} />
             </div>
           </div>
         </div>

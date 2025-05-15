@@ -246,7 +246,7 @@ export function CandidatsTable({ refresh }: { refresh: boolean }) {
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/candidats/${candidatToDelete}`, {
+      const response = await fetch(`http://127.0.0.1:8000/api/candidatSupp/${candidatToDelete}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -611,7 +611,6 @@ export function CandidatsTable({ refresh }: { refresh: boolean }) {
                       <Archive className="mr-2 h-4 w-4" />
                       Marquer
                     </Button>
-                    
                   </div>
                 </>
               )}

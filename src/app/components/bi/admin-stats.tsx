@@ -25,12 +25,14 @@ export function AdminStats() {
     entretiens: { value: 0, percentage: 0 },
     recruteurs: { value: 0, percentage: 0 },
   })
+  const [selectedPeriod, setSelectedPeriod] = useState<"week" | "month" | "year">("week")
+  const [periodTitle, setPeriodTitle] = useState("sur 7 jours")
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const token = sessionStorage.getItem("token")
-        const response = await fetch("http://localhost:8000/api/admin/stats", {
+        const response = await fetch(`http://localhost:8000/api/admin/stats?period=${selectedPeriod}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -69,8 +71,17 @@ export function AdminStats() {
       }
     }
 
+    // Update period title based on selected period
+    if (selectedPeriod === "week") {
+      setPeriodTitle("sur 7 jours")
+    } else if (selectedPeriod === "month") {
+      setPeriodTitle("du mois")
+    } else {
+      setPeriodTitle("de l'année")
+    }
+
     fetchStats()
-  }, [])
+  }, [selectedPeriod])
 
   // Format the trend data for the chart
   const formatTrendData = () => {
@@ -182,8 +193,44 @@ export function AdminStats() {
 
       <Card className="col-span-full shadow-sm hover:shadow-md transition-shadow duration-300">
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-medium text-gray-900">Tendances sur 7 jours</CardTitle>
-          <CardDescription className="text-sm text-gray-500">Évolution des candidats et offres</CardDescription>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle className="text-lg font-medium text-gray-900">Tendances {periodTitle}</CardTitle>
+              <CardDescription className="text-sm text-gray-500">Évolution des candidats et offres</CardDescription>
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setSelectedPeriod("week")}
+                className={`px-3 py-1 text-xs rounded-md ${
+                  selectedPeriod === "week"
+                    ? "bg-blue-100 text-blue-700 font-medium"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                Semaine
+              </button>
+              <button
+                onClick={() => setSelectedPeriod("month")}
+                className={`px-3 py-1 text-xs rounded-md ${
+                  selectedPeriod === "month"
+                    ? "bg-blue-100 text-blue-700 font-medium"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                Mois
+              </button>
+              <button
+                onClick={() => setSelectedPeriod("year")}
+                className={`px-3 py-1 text-xs rounded-md ${
+                  selectedPeriod === "year"
+                    ? "bg-blue-100 text-blue-700 font-medium"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                Année
+              </button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {loading || !stats ? (
@@ -233,3 +280,5 @@ export function AdminStats() {
     </div>
   )
 }
+
+export default AdminStats

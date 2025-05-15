@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { BarChart, LineChart, DonutChart } from "@/components/ui/chart1"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { RefreshCw } from "lucide-react"
+import { RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -79,10 +79,33 @@ export function DashboardCharts({ isAdmin = false }) {
 
         if (moisRes.ok) {
           const moisData = await moisRes.json()
+          // Créer un tableau avec tous les mois de l'année
+          const tousLesMois = [
+            { name: "Jan", Candidats: 0 },
+            { name: "Fév", Candidats: 0 },
+            { name: "Mar", Candidats: 0 },
+            { name: "Avr", Candidats: 0 },
+            { name: "Mai", Candidats: 0 },
+            { name: "Juin", Candidats: 0 },
+            { name: "Juil", Candidats: 0 },
+            { name: "Août", Candidats: 0 },
+            { name: "Sep", Candidats: 0 },
+            { name: "Oct", Candidats: 0 },
+            { name: "Nov", Candidats: 0 },
+            { name: "Déc", Candidats: 0 },
+          ]
+          
+          // Mettre à jour avec les données réelles
           if (Array.isArray(moisData) && moisData.length > 0) {
-            setCandidatsParMois(moisData)
+            moisData.forEach(item => {
+              const index = tousLesMois.findIndex(mois => mois.name === item.name);
+              if (index !== -1) {
+                tousLesMois[index].Candidats = item.Candidats;
+              }
+            });
+            setCandidatsParMois(tousLesMois);
           } else {
-            setCandidatsParMois([])
+            setCandidatsParMois(tousLesMois);
           }
         } else {
           setCandidatsParMois([])
@@ -278,7 +301,7 @@ export function DashboardCharts({ isAdmin = false }) {
                       index="name"
                       category="value"
                       valueFormatter={(value) => `${value} candidats`}
-                      colors={["blue", "indigo", "slate", "sky", "navy"]}
+                      colors={["blue", "purple", "black", "navy", "indigo", "royalblue"]}
                       className="mt-4"
                     />
                   </>

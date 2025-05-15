@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { BarChart, DonutChart } from "@/components/ui/chart1"
+import { DonutChart, LineChart } from "@/components/ui/chart1"
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -144,13 +144,13 @@ export function DetailedStats({ isAdmin = false }: DetailedStatsProps) {
         </div>
       </CardHeader>
       <CardContent className="p-4 flex-grow">
-        <Tabs defaultValue="statut" className="w-full h-full flex flex-col">
+        <Tabs defaultValue="jours" className="w-full h-full flex flex-col">
           <TabsList className="grid grid-cols-2 mb-4">
+            <TabsTrigger value="jours" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+              Entretiens de cette Semaine
+            </TabsTrigger>
             <TabsTrigger value="statut" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
               Statut des Entretiens
-            </TabsTrigger>
-            <TabsTrigger value="jours" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
-              Entretiens par Jour
             </TabsTrigger>
           </TabsList>
 
@@ -195,7 +195,7 @@ export function DetailedStats({ isAdmin = false }: DetailedStatsProps) {
                     <p className="text-red-500">Erreur lors du chargement des données</p>
                   </div>
                 ) : entretiensParJour.length > 0 ? (
-                  <BarChart
+                  <LineChart
                     data={entretiensParJour}
                     index="name"
                     categories={["value"]}
@@ -204,7 +204,11 @@ export function DetailedStats({ isAdmin = false }: DetailedStatsProps) {
                     yAxisWidth={48}
                     showGridLines={false}
                     startYAxisFromZero={true}
-                    tickGap={1}
+                    curveType="natural"
+                    connectNulls={true}
+                    showLegend={false}
+                    showXAxis={true}
+                    showYAxis={true}
                     className="mt-4"
                   />
                 ) : (
